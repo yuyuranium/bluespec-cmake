@@ -28,9 +28,14 @@ function(_bsc_compile_recursively BLUESPEC_OBJECTS ROOT_SOURCE)
                            ""
                            "BSC_FLAGS"
                            ${ARGN})
+
+  # Setup BSC command
+  set(BSC_COMMAND ${BSC_BIN} ${_BSC_FLAGS})
+
   # Setup Bluetcl options
-  set(DEP_CHECK ${BLUETCL_BIN} "-exec" "makedepend" "-sim" "-elab" ${_BSC_FLAGS}
+  set(DEP_CHECK ${BLUETCL_BIN} "-exec" "makedepend" ${_BSC_FLAGS}
                 ${ROOT_SOURCE})
+
   # Bluespec objects
   set(_BLUESPEC_OBJECTS "")
 
@@ -68,7 +73,7 @@ function(_bsc_compile_recursively BLUESPEC_OBJECTS ROOT_SOURCE)
     # Command to build the target
     add_custom_command(
       OUTPUT  ${TARGET}
-      COMMAND ${BSC_COMMAND} ${_BSC_FLAGS} ${SRC}
+      COMMAND ${BSC_COMMAND} ${SRC}
       DEPENDS ${DEPS})
   endforeach()
 
@@ -77,42 +82,116 @@ function(_bsc_compile_recursively BLUESPEC_OBJECTS ROOT_SOURCE)
   message(STATUS "Checking dependencies for ${ROOT_SOURCE} - done")
 endfunction()
 
+macro(_bsc_flags_set_search_paths BSC_FLAGS)
+  cmake_parse_arguments("" ""
+                           ""
+                           "SRC_DIRS"
+                           ${ARGN})
+  set(_BSC_PATH "%/Libraries:${CMAKE_CURRENT_SOURCE_DIR}")
+  foreach(DIR ${_SRC_DIRS})
+    # Use absolute path
+    get_filename_component(ABS_DIR ${DIR} ABSOLUTE)
+    string(APPEND _BSC_PATH ":${ABS_DIR}")
+  endforeach()
+  list(APPEND ${BSC_FLAGS} "-p" ${_BSC_PATH})
+endmacro()
+
+macro(_bsc_flags_append_macro_definitions BSC_FLAGS)
+  cmake_parse_arguments("" ""
+                           ""
+                           "DEFINES"
+                           ${ARGN})
+  foreach(DEF ${_DEFINES})
+    list(APPEND ${BSC_FLAGS} "-D" ${DEF})
+  endforeach()
+endmacro()
+
+macro(_bsc_flags_redirect_output_dir BSC_FLAGS)
+  cmake_parse_arguments("" ""
+                           ""
+                           "OUTPUT_DIRS"
+                           ${ARGN})
+  foreach(DIR ${_OUTPUT_DIRS})
+    list(APPEND ${BSC_FLAGS}
+         ${DIR} ${CMAKE_CURRENT_BINARY_DIR})
+  endforeach()
+endmacro()
+
+function(_set_bluesim_link_flags BLUESIM_LINK_FLAGS)
+  cmake_parse_arguments("" ""
+                           ""
+                           "C_FLAGS;CXX_FLAGS;LD_FLAGS"
+                           ${ARGN})
+  set(_BLUESIM_LINK_FLAGS "")
+
+  foreach(FLAG ${_C_FLAGS})
+    list(APPEND _BLUESIM_LINK_FLAGS "-Xc" ${FLAG})
+  endforeach()
+
+  foreach(FLAG ${_CXX_FLAGS})
+    list(APPEND _BLUESIM_LINK_FLAGS "-Xc++" ${FLAG})
+  endforeach()
+
+  foreach(FLAG ${_LD_FLAGS})
+    list(APPEND _BLUESIM_LINK_FLAGS "-Xl" ${FLAG})
+  endforeach()
+
+  set(${BLUESIM_LINK_FLAGS} ${_BLUESIM_LINK_FLAGS} PARENT_SCOPE)
+endfunction()
+
 # Function to add Bluesim executable as a target
 function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
   cmake_parse_arguments(BLUESIM ""
                                 ""
-                                "BSC_FLAGS;SRC_DIRS;DEFINES;LINK_FLAGS;BDPI_SOURCES"
+                                "BSC_FLAGS;SRC_DIRS;DEFINES;C_FLAGS;CXX_FLAGS;LD_FLAGS;BDPI_FILES"
                                 ${ARGN})
   # Use absolute path
   if(NOT IS_ABSOLUTE ROOT_SOURCE)
     set(ROOT_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/${ROOT_SOURCE}")
   endif()
 
+  # Flags for Bluesim and elaboration
+  list(PREPEND BLUESIM_BSC_FLAGS "-sim" "-elab")
+
   # Set BSC search paths
-  set(BSC_PATH "%/Libraries:${CMAKE_CURRENT_SOURCE_DIR}")
-  foreach(DIR ${BLUESIM_SRC_DIRS})
-    # Use absolute path
-    if(IS_ABSOLUTE ${DIR})
-      string(APPEND BSC_PATH ":${DIR}")
-    else()
-      string(APPEND BSC_PATH ":${CMAKE_CURRENT_SOURCE_DIR}/${DIR}")
-    endif()
-  endforeach()
-  list(APPEND BLUESIM_BSC_FLAGS "-p" ${BSC_PATH})
+  _bsc_flags_set_search_paths(BLUESIM_BSC_FLAGS
+                              SRC_DIRS ${BLUESIM_SRC_DIRS})
 
   # Append all defined macros
-  foreach(DEF ${BLUESIM_DEFINES})
-    list(APPEND BLUESIM_BSC_FLAGS "-D" ${DEF})
-  endforeach()
+  _bsc_flags_append_macro_definitions(BLUESIM_BSC_FLAGS
+                                      DEFINES ${BLUESIM_DEFINES})
 
   # Redirect all generated intermediate files to the build directory
-  list(APPEND BLUESIM_BSC_FLAGS
-    "-bdir" "${CMAKE_CURRENT_BINARY_DIR}"
-    "-simdir" "${CMAKE_CURRENT_BINARY_DIR}"
-    "-info-dir" "${CMAKE_CURRENT_BINARY_DIR}")
+  _bsc_flags_redirect_output_dir(BLUESIM_BSC_FLAGS
+                                 OUTPUT_DIRS "-bdir" "-simdir" "-info-dir")
 
-  # Elaborated Bluesim module
+  set(BSC_COMMAND ${BSC_BIN} ${BLUESIM_BSC_FLAGS})
+
+  # 1. Partial compilation
+  _bsc_compile_recursively(BLUESPEC_OBJECTS ${ROOT_SOURCE} BLUESIM
+    BSC_FLAGS ${BLUESIM_BSC_FLAGS})
+
+  # 2. Bluesim code generation
   set(ELAB_MODULE "${TOP_MODULE}.ba")
+
+  # Elaborate Bluesim top module
+  add_custom_command(
+    OUTPUT  ${ELAB_MODULE}
+    COMMAND ${BSC_COMMAND} "-g" ${TOP_MODULE} ${BLUESIM_BSC_FLAGS} ${ROOT_SOURCE}
+    DEPENDS ${BLUESPEC_OBJECTS}
+    VERBATIM)
+
+  # 3. Link Bluesim executable
+  message(STATUS "Checking number of physical cores")
+  cmake_host_system_information(RESULT N
+                                QUERY NUMBER_OF_PHYSICAL_CORES)
+  message(STATUS "Number of physical cores: ${N}")
+
+  # Setup bluesim link flags
+  _set_bluesim_link_flags(BLUESIM_LINK_FLAGS
+                          C_FLAGS   ${BLUESIM_CFLAGS}
+                          CXX_FLAGS ${BLUESIM_CXX_FLAGS}
+                          LD_FLAGS  ${BLUESIM_LD_FLAGS})
 
   # Compiled files
   set(GENERATED_CXX_SOURCES "${TOP_MODULE}.cxx" "model_${TOP_MODULE}.cxx")
@@ -127,29 +206,15 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
                       ${CMAKE_BINARY_DIR}/${SIM_EXE}
                       ${CMAKE_BINARY_DIR}/${SIM_EXE_SO})
 
-  set(BSC_COMMAND "${BSC_BIN}" "-q" "-elab" "-sim")
-
-  # 1. Partial compilation
-  _bsc_compile_recursively(BLUESPEC_OBJECTS ${ROOT_SOURCE}
-    BSC_FLAGS ${BLUESIM_BSC_FLAGS})
-
-  # 2. Bluesim code generation
-  add_custom_command(
-    OUTPUT  ${ELAB_MODULE}
-    COMMAND ${BSC_COMMAND} "-g" ${TOP_MODULE} ${BLUESIM_BSC_FLAGS} ${ROOT_SOURCE}
-    DEPENDS ${BLUESPEC_OBJECTS}
-    VERBATIM)
-
-  # 3. Link Bluesim executable
   add_custom_command(
     OUTPUT  ${BLUESIM_TARGETS}
-    COMMAND ${BSC_COMMAND} "-parallel-sim-link" "8" "-e" ${TOP_MODULE}
-    ${BLUESIM_BSC_FLAGS} "-o" ${CMAKE_BINARY_DIR}/${SIM_EXE} ${BLUESIM_LINK_FLAGS}
-    ${BLUESIM_BDPI_SOURCES}
+    COMMAND ${BSC_COMMAND} "-parallel-sim-link" ${N} "-e" ${TOP_MODULE}
+            "-o" ${CMAKE_BINARY_DIR}/${SIM_EXE} ${BLUESIM_LINK_FLAGS}
+            ${BLUESIM_BDPI_FILES}
     DEPENDS ${ELAB_MODULE}
     COMMENT "Linking Bluesim executable ${SIM_EXE}"
     VERBATIM)
 
-  add_custom_target(bluesim_${SIM_EXE} ALL
+  add_custom_target(Bluesim.${SIM_EXE} ALL
     DEPENDS ${BLUESIM_TARGETS})
 endfunction()
