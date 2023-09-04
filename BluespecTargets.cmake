@@ -70,11 +70,17 @@ function(_bsc_compile_recursively BLUESPEC_OBJECTS ROOT_SOURCE)
 
     list(GET DEPS 0 SRC) # first dependency is the source file
 
-    # Command to build the target
-    add_custom_command(
-      OUTPUT  ${TARGET}
-      COMMAND ${BSC_COMMAND} ${SRC}
-      DEPENDS ${DEPS})
+    # Check if the target exists
+    get_property(EXIST
+      SOURCE ${TARGET}
+      PROPERTY GENERATED)
+    if(NOT EXIST)
+      # Command to build the target
+      add_custom_command(
+        OUTPUT  ${TARGET}
+        COMMAND ${BSC_COMMAND} ${SRC}
+        DEPENDS ${DEPS})
+    endif()
   endforeach()
 
   # Return the bluespec objects
