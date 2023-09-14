@@ -22,6 +22,18 @@ if(NOT BLUETCL_BIN)
   message(FATAL_ERROR "Bluetcl binary not found!")
 endif()
 
+# Directory for Bluesim executables
+set(BLUESPEC_SIM_DIR ${CMAKE_BINARY_DIR}/sim)
+file(MAKE_DIRECTORY ${BLUESPEC_SIM_DIR})
+
+# Directory for generated Verilog sources
+set(BLUESPEC_VERILOG_DIR ${CMAKE_BINARY_DIR}/verilog)
+file(MAKE_DIRECTORY ${BLUESPEC_VERILOG_DIR})
+
+# Directory for generated CXX sources
+set(BLUESPEC_CXX_DIR ${CMAKE_BINARY_DIR}/cxx)
+file(MAKE_DIRECTORY ${BLUESPEC_CXX_DIR})
+
 # Helper function to compile a root source file recursively
 function(_bsc_compile_recursively BLUESPEC_OBJECTS ROOT_SOURCE)
   cmake_parse_arguments("" ""
@@ -71,15 +83,14 @@ function(_bsc_compile_recursively BLUESPEC_OBJECTS ROOT_SOURCE)
     list(GET DEPS 0 SRC) # first dependency is the source file
 
     # Check if the target exists
-    get_property(EXIST
-      SOURCE ${TARGET}
-      PROPERTY GENERATED)
+    get_property(EXIST GLOBAL PROPERTY ${TARGET})
     if(NOT EXIST)
       # Command to build the target
       add_custom_command(
         OUTPUT  ${TARGET}
         COMMAND ${BSC_COMMAND} ${SRC}
         DEPENDS ${DEPS})
+      set_property(GLOBAL PROPERTY ${TARGET} TRUE)
     endif()
   endforeach()
 
@@ -119,7 +130,7 @@ macro(_bsc_flags_redirect_output_dir BSC_FLAGS)
                            ${ARGN})
   foreach(DIR ${_OUTPUT_DIRS})
     list(APPEND ${BSC_FLAGS}
-         ${DIR} ${CMAKE_CURRENT_BINARY_DIR})
+         ${DIR} ${CMAKE_BINARY_DIR})
   endforeach()
 endmacro()
 
@@ -169,16 +180,20 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
 
   # Redirect all generated intermediate files to the build directory
   _bsc_flags_redirect_output_dir(BLUESIM_BSC_FLAGS
-                                 OUTPUT_DIRS "-bdir" "-simdir" "-info-dir")
+                                 OUTPUT_DIRS "-bdir" "-info-dir")
+
+  list(APPEND BLUESIM_BSC_FLAGS
+       "-simdir" ${BLUESPEC_CXX_DIR})
 
   set(BSC_COMMAND ${BSC_BIN} ${BLUESIM_BSC_FLAGS})
+  message(STATUS ${BSC_COMMAND})
 
   # 1. Partial compilation
   _bsc_compile_recursively(BLUESPEC_OBJECTS ${ROOT_SOURCE} BLUESIM
     BSC_FLAGS ${BLUESIM_BSC_FLAGS})
 
   # 2. Bluesim code generation
-  set(ELAB_MODULE "${TOP_MODULE}.ba")
+  set(ELAB_MODULE ${CMAKE_BINARY_DIR}/${TOP_MODULE}.ba)
 
   # Elaborate Bluesim top module
   add_custom_command(
@@ -206,16 +221,16 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
   set(SIM_EXE_SO "${SIM_EXE}.so")
 
   # All bluesim targets
-  set(BLUESIM_TARGETS ${GENERATED_CXX_SOURCES}
-                      ${GENERATED_CXX_HEADERS}
-                      ${COMPILED_CXX_OBJECTS}
-                      ${CMAKE_BINARY_DIR}/${SIM_EXE}
-                      ${CMAKE_BINARY_DIR}/${SIM_EXE_SO})
+  set(BLUESIM_TARGETS ${BLUESPEC_CXX_DIR}/${GENERATED_CXX_SOURCES}
+                      ${BLUESPEC_CXX_DIR}/${GENERATED_CXX_HEADERS}
+                      ${BLUESPEC_CXX_DIR}/${COMPILED_CXX_OBJECTS}
+                      ${BLUESPEC_SIM_DIR}/${SIM_EXE}
+                      ${BLUESPEC_SIM_DIR}/${SIM_EXE_SO})
 
   add_custom_command(
     OUTPUT  ${BLUESIM_TARGETS}
     COMMAND ${BSC_COMMAND} "-parallel-sim-link" ${N} "-e" ${TOP_MODULE}
-            "-o" ${CMAKE_BINARY_DIR}/${SIM_EXE} ${BLUESIM_LINK_FLAGS}
+            "-o" ${BLUESPEC_SIM_DIR}/${SIM_EXE} ${BLUESIM_LINK_FLAGS}
             ${BLUESIM_BDPI_FILES}
     DEPENDS ${ELAB_MODULE}
     COMMENT "Linking Bluesim executable ${SIM_EXE}"
@@ -223,4 +238,57 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
 
   add_custom_target(Bluesim.${SIM_EXE} ALL
     DEPENDS ${BLUESIM_TARGETS})
+endfunction()
+
+
+# Function to add Bluesim executable as a target
+function(emit_verilog TOP_MODULE ROOT_SOURCE)
+  cmake_parse_arguments(VERILOG ""
+                                ""
+                                "BSC_FLAGS;SRC_DIRS;DEFINES;C_FLAGS;CXX_FLAGS;LD_FLAGS;BDPI_FILES"
+                                ${ARGN})
+  # Use absolute path
+  if(NOT IS_ABSOLUTE ROOT_SOURCE)
+    set(ROOT_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/${ROOT_SOURCE}")
+  endif()
+
+  # Flags for Verilog generation
+  list(PREPEND VERILOG_BSC_FLAGS "-verilog" "-elab")
+
+  # Set BSC search paths
+  _bsc_flags_set_search_paths(VERILOG_BSC_FLAGS
+                              SRC_DIRS ${VERILOG_SRC_DIRS})
+
+  # Append all defined macros
+  _bsc_flags_append_macro_definitions(VERILOG_BSC_FLAGS
+                                      DEFINES ${VERILOG_DEFINES})
+
+  # Redirect all generated intermediate files to the build directory
+  _bsc_flags_redirect_output_dir(VERILOG_BSC_FLAGS
+                                 OUTPUT_DIRS "-bdir" "-info-dir")
+
+  # Generate the Verilog at build directory
+  list(APPEND VERILOG_BSC_FLAGS
+       "-vdir" ${BLUESPEC_VERILOG_DIR})
+
+  set(BSC_COMMAND ${BSC_BIN} ${VERILOG_BSC_FLAGS})
+
+  # 1. Partial compilation
+  _bsc_compile_recursively(BLUESPEC_OBJECTS ${ROOT_SOURCE} BLUESIM
+    BSC_FLAGS ${VERILOG_BSC_FLAGS})
+
+  # 2. Verilog code generation
+  set(VERILOG_TARGET ${BLUESPEC_VERILOG_DIR}/${TOP_MODULE}.v)
+
+  # Generate Verilog code for top module
+  add_custom_command(
+    OUTPUT  ${VERILOG_TARGET}
+    COMMAND ${BSC_COMMAND} "-g" ${TOP_MODULE} ${VERILOG_BSC_FLAGS} ${ROOT_SOURCE}
+    DEPENDS ${BLUESPEC_OBJECTS}
+    COMMENT "Generating Verilog for ${TOP_MODULE}.v"
+    VERBATIM)
+
+  add_custom_target(Verilog.${TOP_MODULE}.v ALL
+    DEPENDS ${VERILOG_TARGET})
+
 endfunction()
