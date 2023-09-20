@@ -186,10 +186,9 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
        "-simdir" ${BLUESPEC_CXX_DIR})
 
   set(BSC_COMMAND ${BSC_BIN} ${BLUESIM_BSC_FLAGS})
-  message(STATUS ${BSC_COMMAND})
 
   # 1. Partial compilation
-  _bsc_compile_recursively(BLUESPEC_OBJECTS ${ROOT_SOURCE} BLUESIM
+  _bsc_compile_recursively(BLUESPEC_OBJECTS ${ROOT_SOURCE}
     BSC_FLAGS ${BLUESIM_BSC_FLAGS})
 
   # 2. Bluesim code generation
@@ -221,9 +220,12 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
   set(SIM_EXE_SO "${SIM_EXE}.so")
 
   # All bluesim targets
-  set(BLUESIM_TARGETS ${BLUESPEC_CXX_DIR}/${GENERATED_CXX_SOURCES}
-                      ${BLUESPEC_CXX_DIR}/${GENERATED_CXX_HEADERS}
-                      ${BLUESPEC_CXX_DIR}/${COMPILED_CXX_OBJECTS}
+  list(TRANSFORM GENERATED_CXX_SOURCES PREPEND ${BLUESPEC_CXX_DIR}/)
+  list(TRANSFORM GENERATED_CXX_HEADERS PREPEND ${BLUESPEC_CXX_DIR}/)
+  list(TRANSFORM COMPILED_CXX_OBJECTS PREPEND ${BLUESPEC_CXX_DIR}/)
+  set(BLUESIM_TARGETS ${GENERATED_CXX_SOURCES}
+                      ${GENERATED_CXX_HEADERS}
+                      ${COMPILED_CXX_OBJECTS}
                       ${BLUESPEC_SIM_DIR}/${SIM_EXE}
                       ${BLUESPEC_SIM_DIR}/${SIM_EXE_SO})
 
@@ -274,7 +276,7 @@ function(emit_verilog TOP_MODULE ROOT_SOURCE)
   set(BSC_COMMAND ${BSC_BIN} ${VERILOG_BSC_FLAGS})
 
   # 1. Partial compilation
-  _bsc_compile_recursively(BLUESPEC_OBJECTS ${ROOT_SOURCE} BLUESIM
+  _bsc_compile_recursively(BLUESPEC_OBJECTS ${ROOT_SOURCE}
     BSC_FLAGS ${VERILOG_BSC_FLAGS})
 
   # 2. Verilog code generation
