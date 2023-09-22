@@ -233,7 +233,7 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
     OUTPUT  ${BLUESIM_TARGETS}
     COMMAND ${BSC_COMMAND} "-parallel-sim-link" ${N} "-e" ${TOP_MODULE}
             "-o" ${BLUESPEC_SIM_DIR}/${SIM_EXE} ${BLUESIM_LINK_FLAGS}
-            ${BLUESIM_BDPI_FILES} $$ touch ${BLUESIM_TARGETS}
+            ${BLUESIM_BDPI_FILES} && touch ${BLUESIM_TARGETS}
     DEPENDS ${ELAB_MODULE}
     COMMENT "Linking Bluesim executable ${SIM_EXE}"
     VERBATIM)
