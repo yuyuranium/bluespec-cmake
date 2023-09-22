@@ -88,7 +88,7 @@ function(_bsc_compile_recursively BLUESPEC_OBJECTS ROOT_SOURCE)
       # Command to build the target
       add_custom_command(
         OUTPUT  ${TARGET}
-        COMMAND ${BSC_COMMAND} ${SRC}
+        COMMAND ${BSC_COMMAND} ${SRC} && touch ${TARGET}
         DEPENDS ${DEPS})
       set_property(GLOBAL PROPERTY ${TARGET} TRUE)
     endif()
@@ -233,7 +233,7 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
     OUTPUT  ${BLUESIM_TARGETS}
     COMMAND ${BSC_COMMAND} "-parallel-sim-link" ${N} "-e" ${TOP_MODULE}
             "-o" ${BLUESPEC_SIM_DIR}/${SIM_EXE} ${BLUESIM_LINK_FLAGS}
-            ${BLUESIM_BDPI_FILES}
+            ${BLUESIM_BDPI_FILES} $$ touch ${BLUESIM_TARGETS}
     DEPENDS ${ELAB_MODULE}
     COMMENT "Linking Bluesim executable ${SIM_EXE}"
     VERBATIM)
@@ -285,7 +285,8 @@ function(emit_verilog TOP_MODULE ROOT_SOURCE)
   # Generate Verilog code for top module
   add_custom_command(
     OUTPUT  ${VERILOG_TARGET}
-    COMMAND ${BSC_COMMAND} "-g" ${TOP_MODULE} ${VERILOG_BSC_FLAGS} ${ROOT_SOURCE}
+    COMMAND ${BSC_COMMAND} "-g" ${TOP_MODULE} ${VERILOG_BSC_FLAGS}
+            ${ROOT_SOURCE} && touch ${VERILOG_TARGET}
     DEPENDS ${BLUESPEC_OBJECTS}
     COMMENT "Generating Verilog for ${TOP_MODULE}.v"
     VERBATIM)
