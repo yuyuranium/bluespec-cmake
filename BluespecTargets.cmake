@@ -26,6 +26,76 @@ endif()
 cmake_host_system_information(RESULT NPROC
                               QUERY NUMBER_OF_PHYSICAL_CORES)
 
+function(_bsc_find_systemc)
+  if(NOT BSC::systemc)
+    # Use BSC defined env variable
+    find_path(SYSTEMC_INCLUDE NAMES systemc.h
+      HINTS "${SYSTEMC}" ENV SYSTEMC
+      PATH_SUFFIXES include)
+    find_library(SYSTEMC_LIBDIR NAMES systemc
+      HINTS "${SYSTEMC}" ENV SYSTEMC
+      PATH_SUFFIXES lib)
+
+    if(SYSTEMC_INCLUDE AND SYSTEMC_LIBDIR)
+      add_library(BSC::systemc INTERFACE IMPORTED)
+      set_target_properties(BSC::systemc
+        PROPERTIES
+          INTERFACE_INCLUDE_DIRECTORIES "${SYSTEMC_INCLUDE}"
+          INTERFACE_LINK_LIBRARIES "${SYSTEMC_LIBDIR}")
+      return()
+    endif()
+
+    # If env variable is not set, use CMake module
+    find_package(SystemCLanguage QUIET)
+    if(SystemCLanguage_FOUND)
+      add_library(BSC::systemc INTERFACE IMPORTED)
+      set_target_properties(BSC::systemc
+        PROPERTIES
+          INTERFACE_LINK_LIBRARIES "SystemC::systemc")
+      return()
+    endif()
+
+    message("SystemC not found. This can be fixed by doing either of the following steps:")
+    message("- set SYSTEMC (environment) variable; or")
+    message("- use the CMake module of your SystemC installation (may require CMAKE_PREFIX_PATH)")
+    message(FATAL_ERROR "SystemC not found")
+  endif()
+endfunction()
+
+function(_bsc_find_bluesim)
+  get_filename_component(BSC_BIN_PATH "${BSC_BIN}" PATH)
+  set(_BSC_LIB_PATH "${BSC_BIN_PATH}/../lib/Bluesim")
+
+  if(NOT BSC::bskernel OR NOT BSC::bsprim)
+
+    find_library(BLUESIM_BSKERNEL NAMES bskernel
+      HINTS "${_BSC_LIB_PATH}" ENV BLUESPECDIR)
+
+    find_library(BLUESIM_BSPRIME NAMES bsprim
+      HINTS "${_BSC_LIB_PATH}" ENV BLUESPECDIR)
+
+    if(BLUESIM_BSKERNEL AND BLUESIM_BSPRIME)
+      add_library(BSC::bskernel INTERFACE IMPORTED)
+      set_target_properties(BSC::bskernel
+        PROPERTIES
+          INTERFACE_INCLUDE_DIRECTORIES "${BLUESIM_BSKERNEL}"
+          INTERFACE_LINK_LIBRARIES "${BLUESIM_BSKERNEL}")
+
+      add_library(BSC::bsprim INTERFACE IMPORTED)
+      set_target_properties(BSC::bsprim
+        PROPERTIES
+          INTERFACE_INCLUDE_DIRECTORIES "${BLUESIM_BSPRIME}"
+          INTERFACE_LINK_LIBRARIES "${BLUESIM_BSPRIME}")
+      return()
+    endif()
+    message("Bluesim library not found. This can be fixed by setting BLUESPECDIR (environment) variable")
+    message(FATAL_ERROR "Bluesim library not found")
+  endif()
+endfunction()
+
+function(_bsc_link_bluesim)
+endfunction()
+
 # Helper function to compile a root source file recursively
 function(_bsc_compile_recursively BLUESPEC_OBJECTS ROOT_SOURCE)
   cmake_parse_arguments("" ""
@@ -155,7 +225,7 @@ function(add_bsim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
   add_custom_command(
     OUTPUT  ${BLUESIM_TARGETS}
     COMMAND ${BSC_COMMAND} "-quiet" "-parallel-sim-link" ${NPROC} "-e" ${TOP_MODULE}
-            "-o" ${SIM_EXE_BIN} ${BSIM_LINK_FLAGS}
+            "-o" ${SIM_EXE_BIN}
     DEPENDS ${ELAB_MODULE}
     COMMENT "Linking Bluesim executable ${SIM_EXE}"
     VERBATIM)
@@ -208,5 +278,91 @@ function(emit_verilog TOP_MODULE ROOT_SOURCE)
     DEPENDS ${BLUE_OBJECTS}
     COMMENT "Generating Verilog source ${TOP_MODULE}.v"
     VERBATIM)
+
+endfunction()
+
+function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
+  cmake_parse_arguments(BSIM_SC ""
+                           ""
+                           "BSC_FLAGS;SRC_DIRS"
+                           ${ARGN})
+  # Use absolute path
+  get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
+
+  # Set bsc search path
+  set(_BSC_PATH "%/Libraries:${CMAKE_CURRENT_SOURCE_DIR}")
+  foreach(DIR ${BSIM_SC_SRC_DIRS})
+    get_filename_component(ABS_DIR ${DIR} ABSOLUTE)
+    string(APPEND _BSC_PATH ":${ABS_DIR}")
+  endforeach()
+  list(APPEND BSIM_SC_BSC_FLAGS "-p" ${_BSC_PATH})
+
+  get_target_property(BINARY_DIR ${TARGET} BINARY_DIR)
+  set(SIMDIR ${BINARY_DIR}/CMakeFiles/${TARGET}.dir)
+  set(BDIR ${SIMDIR}/${TOP_MODULE}.dir)
+  file(MAKE_DIRECTORY ${BDIR})
+
+  list(APPEND BSIM_SC_BSC_FLAGS "-bdir" ${BDIR})
+  list(APPEND BSIM_SC_BSC_FLAGS "-info-dir" ${BDIR})
+  list(APPEND BSIM_SC_BSC_FLAGS "-simdir" ${SIMDIR})
+
+  # Flags for Bluesim and elaboration
+  list(PREPEND BSIM_SC_BSC_FLAGS "-sim" "-elab")
+
+  set(BSC_COMMAND ${BSC_BIN} ${BSIM_SC_BSC_FLAGS})
+
+  _bsc_compile_recursively(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${BSIM_SC_BSC_FLAGS})
+
+  # 2. Bluesim code generation
+  set(ELAB_MODULE ${BDIR}/${TOP_MODULE}.ba)
+
+  # Elaborate Bluesim top module
+  add_custom_command(
+    OUTPUT  ${ELAB_MODULE}
+    COMMAND ${BSC_COMMAND} "-g" ${TOP_MODULE} ${BSIM_BSC_FLAGS} ${ROOT_SOURCE}
+            && touch ${ELAB_MODULE}
+    DEPENDS ${BLUE_OBJECTS}
+    VERBATIM)
+
+  # Compiled files
+  set(GENERATED_CXX_SOURCES "${TOP_MODULE}.cxx" "${TOP_MODULE}_systemc.cxx"
+                            "model_${TOP_MODULE}.cxx")
+  set(GENERATED_CXX_HEADERS "${TOP_MODULE}.h" "${TOP_MODULE}_systemc.h"
+                            "model_${TOP_MODULE}.h")
+  set(COMPILED_CXX_OBJECTS "${TOP_MODULE}.o" "${TOP_MODULE}_systemc.o"
+                           "model_${TOP_MODULE}.o")
+
+  # All bluesim targets
+  list(TRANSFORM GENERATED_CXX_SOURCES PREPEND ${SIMDIR}/)
+  list(TRANSFORM GENERATED_CXX_HEADERS PREPEND ${SIMDIR}/)
+  list(TRANSFORM COMPILED_CXX_OBJECTS PREPEND ${SIMDIR}/)
+  set(BSIM_SC_TARGETS ${GENERATED_CXX_SOURCES}
+                      ${GENERATED_CXX_HEADERS}
+                      ${COMPILED_CXX_OBJECTS})
+
+  # 3. Generate SystemC model
+  _bsc_find_systemc()
+  # Use include directory to get SystemC Home
+  get_target_property(SYSTEMC_INCLUDE BSC::systemc INTERFACE_INCLUDE_DIRECTORIES)
+  get_filename_component(SYSTEMC_HOME ${SYSTEMC_INCLUDE} DIRECTORY)
+  get_target_property(BSC_CXX_STANDARD ${TARGET} CXX_STANDARD)
+
+  add_custom_command(
+    OUTPUT  ${BSIM_SC_TARGETS}
+    COMMAND ${CMAKE_COMMAND} -E env SYSTEMC=${SYSTEMC_HOME}
+            ${BSC_COMMAND} "-systemc" "-parallel-sim-link" ${NPROC} "-e" ${TOP_MODULE}
+            "-Xc++" "-std=c++${BSC_CXX_STANDARD}" && touch ${BSIM_SC_TARGETS}
+    DEPENDS ${ELAB_MODULE}
+    COMMENT "Generating SystemC model for ${TOP_MODULE}"
+    VERBATIM)
+
+  add_custom_target("${TARGET}.Bluesim.${TOP_MODULE}" ALL DEPENDS ${BSIM_SC_TARGETS})
+  add_dependencies(${TARGET} "${TARGET}.Bluesim.${TOP_MODULE}")
+  _bsc_find_bluesim()
+
+  get_target_property(LIBBSKERNEL BSC::bskernel INTERFACE_INCLUDE_DIRECTORIES)
+  get_filename_component(BLUESIM_INCLUDE ${LIBBSKERNEL} DIRECTORY)
+  target_include_directories(${TARGET} PUBLIC ${SIMDIR} ${BLUESIM_INCLUDE})
+  target_link_libraries(${TARGET} ${COMPILED_CXX_OBJECTS} BSC::systemc BSC::bskernel BSC::bsprim)
 
 endfunction()
