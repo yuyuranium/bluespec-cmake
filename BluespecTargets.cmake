@@ -351,7 +351,8 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
     OUTPUT  ${BSIM_SC_TARGETS}
     COMMAND ${CMAKE_COMMAND} -E env SYSTEMC=${SYSTEMC_HOME}
             ${BSC_COMMAND} "-systemc" "-parallel-sim-link" ${NPROC} "-e" ${TOP_MODULE}
-            "-Xc++" "-std=c++${BSC_CXX_STANDARD}" && touch ${BSIM_SC_TARGETS}
+            "-Xc++" "${CMAKE_CXX${BSC_CXX_STANDARD}_STANDARD_COMPILE_OPTION}"
+            && touch ${BSIM_SC_TARGETS}
     DEPENDS ${ELAB_MODULE}
     COMMENT "Generating SystemC model for ${TOP_MODULE}"
     VERBATIM)
