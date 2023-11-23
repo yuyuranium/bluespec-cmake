@@ -26,7 +26,7 @@ endif()
 cmake_host_system_information(RESULT NPROC
                               QUERY NUMBER_OF_PHYSICAL_CORES)
 
-function(_bsc_find_systemc)
+function(_bsc_find_systemc SYSTEMC_HOME)
   if(NOT BSC::systemc)
     # Use BSC defined env variable
     find_path(SYSTEMC_INCLUDE NAMES systemc.h
@@ -42,6 +42,10 @@ function(_bsc_find_systemc)
         PROPERTIES
           INTERFACE_INCLUDE_DIRECTORIES "${SYSTEMC_INCLUDE}"
           INTERFACE_LINK_LIBRARIES "${SYSTEMC_LIBDIR}")
+
+      # Get SYSTEMC_HOME from include directory
+      get_filename_component(_SYSTEMC_HOME ${SYSTEMC_INCLUDE} DIRECTORY)
+      set(SYSTEMC_HOME ${_SYSTEMC_HOME} PARENT_SCOPE)
       return()
     endif()
 
@@ -52,6 +56,11 @@ function(_bsc_find_systemc)
       set_target_properties(BSC::systemc
         PROPERTIES
           INTERFACE_LINK_LIBRARIES "SystemC::systemc")
+
+      # Get SYSTEMC_HOME from include directory
+      get_target_property(SYSTEMC_INCLUDE BSC::systemc INTERFACE_INCLUDE_DIRECTORIES)
+      get_filename_component(_SYSTEMC_HOME ${SYSTEMC_INCLUDE} DIRECTORY)
+      set(SYSTEMC_HOME ${_SYSTEMC_HOME} PARENT_SCOPE)
       return()
     endif()
 
@@ -62,7 +71,7 @@ function(_bsc_find_systemc)
   endif()
 endfunction()
 
-function(_bsc_find_bluesim)
+function(_bsc_find_bluesim BLUESIM_INCLUDE)
   get_filename_component(BSC_BIN_PATH "${BSC_BIN}" PATH)
   set(_BSC_LIB_PATH "${BSC_BIN_PATH}/../lib/Bluesim")
 
@@ -86,6 +95,9 @@ function(_bsc_find_bluesim)
         PROPERTIES
           INTERFACE_INCLUDE_DIRECTORIES "${BLUESIM_BSPRIME}"
           INTERFACE_LINK_LIBRARIES "${BLUESIM_BSPRIME}")
+
+      # Return Bluesim include library
+      set(${BLUESIM_INCLUDE} ${_BSC_LIB_PATH} PARENT_SCOPE)
       return()
     endif()
     message("Bluesim library not found. This can be fixed by setting BLUESPECDIR (environment) variable")
@@ -286,6 +298,26 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
                            ""
                            "BSC_FLAGS;SRC_DIRS"
                            ${ARGN})
+  # Create Bluesim subtarget
+  set(BSIM_TARGET "${TARGET}.SystemC.${TOP_MODULE}")
+
+  # Generate simulation sources under TARGET's binary directory
+  get_target_property(BINARY_DIR ${TARGET} BINARY_DIR)
+  set(SIMDIR ${BINARY_DIR}/CMakeFiles/${TARGET}.dir)
+  file(MAKE_DIRECTORY ${SIMDIR})
+
+  set(GENERATED_SC_SOURCE "${SIMDIR}/${TOP_MODULE}_systemc.cxx")
+  set(GENERATED_SC_HEADER "${SIMDIR}/${TOP_MODULE}_systemc.h")
+  set(GENERATED_SC_OBJECT "${SIMDIR}/${TOP_MODULE}_systemc.o")
+  set(SC_TARGETS ${GENERATED_SC_SOURCE}
+                 ${GENERATED_SC_HEADER}
+                 ${GENERATED_SC_OBJECT})
+
+  add_custom_target(${BSIM_TARGET} ALL DEPENDS ${SC_TARGETS})
+
+  # Add dependency to the target
+  add_dependencies(${TARGET} ${BSIM_TARGET})
+
   # Use absolute path
   get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
 
@@ -297,9 +329,8 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
   endforeach()
   list(APPEND BSIM_SC_BSC_FLAGS "-p" ${_BSC_PATH})
 
-  get_target_property(BINARY_DIR ${TARGET} BINARY_DIR)
-  set(SIMDIR ${BINARY_DIR}/CMakeFiles/${TARGET}.dir)
-  set(BDIR ${SIMDIR}/${TOP_MODULE}.dir)
+  get_target_property(BINARY_DIR ${BSIM_TARGET} BINARY_DIR)
+  set(BDIR ${BINARY_DIR}/CMakeFiles/${BSIM_TARGET}.dir/${TOP_MODULE}.dir)
   file(MAKE_DIRECTORY ${BDIR})
 
   list(APPEND BSIM_SC_BSC_FLAGS "-bdir" ${BDIR})
@@ -325,45 +356,34 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
     VERBATIM)
 
   # Compiled files
-  set(GENERATED_CXX_SOURCES "${TOP_MODULE}.cxx" "${TOP_MODULE}_systemc.cxx"
-                            "model_${TOP_MODULE}.cxx")
-  set(GENERATED_CXX_HEADERS "${TOP_MODULE}.h" "${TOP_MODULE}_systemc.h"
-                            "model_${TOP_MODULE}.h")
-  set(COMPILED_CXX_OBJECTS "${TOP_MODULE}.o" "${TOP_MODULE}_systemc.o"
-                           "model_${TOP_MODULE}.o")
+  set(GENERATED_CXX_SOURCES "${TOP_MODULE}.cxx" "model_${TOP_MODULE}.cxx")
+  set(GENERATED_CXX_HEADERS "${TOP_MODULE}.h" "model_${TOP_MODULE}.h")
+  set(GENERATED_CXX_OBJECTS "${TOP_MODULE}.o" "model_${TOP_MODULE}.o")
 
   # All bluesim targets
   list(TRANSFORM GENERATED_CXX_SOURCES PREPEND ${SIMDIR}/)
   list(TRANSFORM GENERATED_CXX_HEADERS PREPEND ${SIMDIR}/)
-  list(TRANSFORM COMPILED_CXX_OBJECTS PREPEND ${SIMDIR}/)
+  list(TRANSFORM GENERATED_CXX_OBJECTS PREPEND ${SIMDIR}/)
   set(BSIM_SC_TARGETS ${GENERATED_CXX_SOURCES}
                       ${GENERATED_CXX_HEADERS}
-                      ${COMPILED_CXX_OBJECTS})
+                      ${GENERATED_CXX_OBJECTS}
+                      ${SC_TARGETS})
 
   # 3. Generate SystemC model
-  _bsc_find_systemc()
-  # Use include directory to get SystemC Home
-  get_target_property(SYSTEMC_INCLUDE BSC::systemc INTERFACE_INCLUDE_DIRECTORIES)
-  get_filename_component(SYSTEMC_HOME ${SYSTEMC_INCLUDE} DIRECTORY)
-  get_target_property(BSC_CXX_STANDARD ${TARGET} CXX_STANDARD)
-
+  _bsc_find_systemc(SYSTEMC_HOME)
+  get_target_property(CXX_STANDARD ${TARGET} CXX_STANDARD)
   add_custom_command(
     OUTPUT  ${BSIM_SC_TARGETS}
     COMMAND ${CMAKE_COMMAND} -E env SYSTEMC=${SYSTEMC_HOME}
             ${BSC_COMMAND} "-systemc" "-parallel-sim-link" ${NPROC} "-e" ${TOP_MODULE}
-            "-Xc++" "${CMAKE_CXX${BSC_CXX_STANDARD}_STANDARD_COMPILE_OPTION}"
+            "-Xc++" "${CMAKE_CXX${CXX_STANDARD}_STANDARD_COMPILE_OPTION}"
             && touch ${BSIM_SC_TARGETS}
     DEPENDS ${ELAB_MODULE}
     COMMENT "Generating SystemC model for ${TOP_MODULE}"
     VERBATIM)
 
-  add_custom_target("${TARGET}.Bluesim.${TOP_MODULE}" ALL DEPENDS ${BSIM_SC_TARGETS})
-  add_dependencies(${TARGET} "${TARGET}.Bluesim.${TOP_MODULE}")
-  _bsc_find_bluesim()
-
-  get_target_property(LIBBSKERNEL BSC::bskernel INTERFACE_INCLUDE_DIRECTORIES)
-  get_filename_component(BLUESIM_INCLUDE ${LIBBSKERNEL} DIRECTORY)
+  _bsc_find_bluesim(BLUESIM_INCLUDE)
   target_include_directories(${TARGET} PUBLIC ${SIMDIR} ${BLUESIM_INCLUDE})
-  target_link_libraries(${TARGET} ${COMPILED_CXX_OBJECTS} BSC::systemc BSC::bskernel BSC::bsprim)
-
+  target_link_libraries(${TARGET} ${GENERATED_CXX_OBJECTS} ${GENERATED_SC_OBJECT}
+                                  BSC::systemc BSC::bskernel BSC::bsprim)
 endfunction()
