@@ -50,15 +50,16 @@ function(_bsc_find_systemc SYSTEMC_HOME)
     endif()
 
     # If env variable is not set, use CMake module
-    find_package(SystemCLanguage QUIET)
+    find_package(SystemCLanguage CONFIG REQUIRED)
     if(SystemCLanguage_FOUND)
       add_library(BSC::systemc INTERFACE IMPORTED)
+      get_target_property(SYSTEMC_INCLUDE SystemC::systemc INTERFACE_INCLUDE_DIRECTORIES)
       set_target_properties(BSC::systemc
         PROPERTIES
+          INTERFACE_INCLUDE_DIRECTORIES "${SYSTEMC_INCLUDE}"
           INTERFACE_LINK_LIBRARIES "SystemC::systemc")
 
       # Get SYSTEMC_HOME from include directory
-      get_target_property(SYSTEMC_INCLUDE BSC::systemc INTERFACE_INCLUDE_DIRECTORIES)
       get_filename_component(_SYSTEMC_HOME ${SYSTEMC_INCLUDE} DIRECTORY)
       set(SYSTEMC_HOME ${_SYSTEMC_HOME} PARENT_SCOPE)
       return()
@@ -72,7 +73,6 @@ function(_bsc_find_systemc SYSTEMC_HOME)
     get_target_property(SYSTEMC_INCLUDE BSC::systemc INTERFACE_INCLUDE_DIRECTORIES)
     get_filename_component(_SYSTEMC_HOME ${SYSTEMC_INCLUDE} DIRECTORY)
     set(SYSTEMC_HOME ${_SYSTEMC_HOME} PARENT_SCOPE)
-    message(FATAL_ERROR "3")
   endif()
 endfunction()
 
