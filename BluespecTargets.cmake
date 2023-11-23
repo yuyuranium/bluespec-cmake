@@ -187,8 +187,14 @@ function(add_bsim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
   # Create Bluesim target
   set(TARGET "Bluesim.${SIM_EXE}")
   set(SIMDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir)
-  set(SIM_EXE_BIN ${SIMDIR}/${SIM_EXE})
-  set(SIM_EXE_SO ${SIMDIR}/${SIM_EXE}.so)
+  # Prefer CMAKE_RUNTIME_OUTPUT_DIRECTORY
+  if(CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    set(SIM_EXE_BIN ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${SIM_EXE})
+    set(SIM_EXE_SO ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${SIM_EXE}.so)
+  else()
+    set(SIM_EXE_BIN ${SIMDIR}/${SIM_EXE})
+    set(SIM_EXE_SO ${SIMDIR}/${SIM_EXE}.so)
+  endif()
   add_custom_target(${TARGET} ALL DEPENDS ${SIM_EXE_BIN})
 
   # Use absolute path
@@ -255,7 +261,13 @@ function(emit_verilog TOP_MODULE ROOT_SOURCE)
                              ${ARGN})
   # Create Verilog target
   set(TARGET "Verilog.${TOP_MODULE}")
-  set(VDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir)
+  # Prefer CMAKE_LIBRARY_OUTPUT_DIRECTORY
+  if(CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+    set(VDIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Verilog)
+    file(MAKE_DIRECTORY ${VDIR})
+  else()
+    set(VDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir)
+  endif()
   set(GENERATED_VLOG_SOURCE ${VDIR}/${TOP_MODULE}.v)
 
   add_custom_target(${TARGET} ALL DEPENDS ${GENERATED_VLOG_SOURCE})
@@ -264,7 +276,7 @@ function(emit_verilog TOP_MODULE ROOT_SOURCE)
   get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
 
   # Make output paths for blue objects
-  set(BDIR ${VDIR}/${TOP_MODULE}.dir)
+  set(BDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir/${TOP_MODULE}.dir)
   file(MAKE_DIRECTORY ${BDIR})
 
   # Setup search and output path
