@@ -168,6 +168,17 @@ function(_bsc_compile_recursively BLUESPEC_OBJECTS ROOT_SOURCE)
   message(STATUS "Checking dependencies for ${ROOT_SOURCE} - done")
 endfunction()
 
+# Macro to setup search path
+macro(_bsc_setup_search_path BSC_FLAGS SRC_DIRS)
+  # Set bsc search path
+  set(_BSC_PATH "%/Libraries:${CMAKE_CURRENT_SOURCE_DIR}")
+  foreach(DIR ${${SRC_DIRS}})
+    get_filename_component(ABS_DIR ${DIR} ABSOLUTE)
+    string(APPEND _BSC_PATH ":${ABS_DIR}")
+  endforeach()
+  list(APPEND ${BSC_FLAGS} "-p" ${_BSC_PATH})
+endmacro()
+
 function(add_bsim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
   cmake_parse_arguments(BSIM ""
                              ""
@@ -175,36 +186,29 @@ function(add_bsim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
                              ${ARGN})
   # Create Bluesim target
   set(TARGET "Bluesim.${SIM_EXE}")
-  set(SIM_EXE_BIN ${CMAKE_BINARY_DIR}/${SIM_EXE})
-  set(SIM_EXE_SO ${CMAKE_BINARY_DIR}/${SIM_EXE}.so)
-
+  set(SIMDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir)
+  set(SIM_EXE_BIN ${SIMDIR}/${SIM_EXE})
+  set(SIM_EXE_SO ${SIMDIR}/${SIM_EXE}.so)
   add_custom_target(${TARGET} ALL DEPENDS ${SIM_EXE_BIN})
 
   # Use absolute path
   get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
 
-  # Set bsc search path
-  set(_BSC_PATH "%/Libraries:${CMAKE_CURRENT_SOURCE_DIR}")
-  foreach(DIR ${BSIM_SRC_DIRS})
-    get_filename_component(ABS_DIR ${DIR} ABSOLUTE)
-    string(APPEND _BSC_PATH ":${ABS_DIR}")
-  endforeach()
-  list(APPEND BSIM_BSC_FLAGS "-p" ${_BSC_PATH})
-
-  get_target_property(BINARY_DIR ${TARGET} BINARY_DIR)
-  set(SIMDIR ${BINARY_DIR}/CMakeFiles/${TARGET}.dir)
+  # Make output paths for blue objects
   set(BDIR ${SIMDIR}/${TOP_MODULE}.dir)
   file(MAKE_DIRECTORY ${BDIR})
 
+  # Setup search and output path
+  _bsc_setup_search_path(BSIM_BSC_FLAGS BSIM_SRC_DIRS)
   list(APPEND BSIM_BSC_FLAGS "-bdir" ${BDIR})
   list(APPEND BSIM_BSC_FLAGS "-info-dir" ${BDIR})
   list(APPEND BSIM_BSC_FLAGS "-simdir" ${SIMDIR})
 
   # Flags for Bluesim and elaboration
   list(PREPEND BSIM_BSC_FLAGS "-sim" "-elab")
-
   set(BSC_COMMAND ${BSC_BIN} ${BSIM_BSC_FLAGS})
 
+  # 1. Partial compilation
   _bsc_compile_recursively(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${BSIM_BSC_FLAGS})
 
   # 2. Bluesim code generation
@@ -220,16 +224,16 @@ function(add_bsim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
 
   # Compiled files
   set(GENERATED_CXX_SOURCES "${TOP_MODULE}.cxx" "model_${TOP_MODULE}.cxx")
-  set(GENERATED_CXX_HEADERS "${TOP_MODULE}.h" "model_${TOP_MODULE}.h")
-  set(COMPILED_CXX_OBJECTS "${TOP_MODULE}.o" "model_${TOP_MODULE}.o")
+  set(GENERATED_CXX_HEADERS "${TOP_MODULE}.h"   "model_${TOP_MODULE}.h")
+  set(GENERATED_CXX_OBJECTS "${TOP_MODULE}.o"   "model_${TOP_MODULE}.o")
 
   # All bluesim targets
   list(TRANSFORM GENERATED_CXX_SOURCES PREPEND ${SIMDIR}/)
   list(TRANSFORM GENERATED_CXX_HEADERS PREPEND ${SIMDIR}/)
-  list(TRANSFORM COMPILED_CXX_OBJECTS PREPEND ${SIMDIR}/)
+  list(TRANSFORM GENERATED_CXX_OBJECTS PREPEND ${SIMDIR}/)
   set(BLUESIM_TARGETS ${GENERATED_CXX_SOURCES}
                       ${GENERATED_CXX_HEADERS}
-                      ${COMPILED_CXX_OBJECTS}
+                      ${GENERATED_CXX_OBJECTS}
                       ${SIM_EXE_BIN}
                       ${SIM_EXE_SO})
 
@@ -259,24 +263,18 @@ function(emit_verilog TOP_MODULE ROOT_SOURCE)
   # Use absolute path
   get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
 
-  # Set bsc search path
-  set(_BSC_PATH "%/Libraries:${CMAKE_CURRENT_SOURCE_DIR}")
-  foreach(DIR ${VLOG_SRC_DIRS})
-    get_filename_component(ABS_DIR ${DIR} ABSOLUTE)
-    string(APPEND _BSC_PATH ":${ABS_DIR}")
-  endforeach()
-  list(APPEND VLOG_BSC_FLAGS "-p" ${_BSC_PATH})
-
+  # Make output paths for blue objects
   set(BDIR ${VDIR}/${TOP_MODULE}.dir)
   file(MAKE_DIRECTORY ${BDIR})
 
+  # Setup search and output path
+  _bsc_setup_search_path(VLOG_BSC_FLAGS VLOG_SRC_DIRS)
   list(APPEND VLOG_BSC_FLAGS "-bdir" ${BDIR})
   list(APPEND VLOG_BSC_FLAGS "-info-dir" ${BDIR})
   list(APPEND VLOG_BSC_FLAGS "-vdir" ${VDIR})
 
   # Flags for Bluesim and elaboration
   list(PREPEND VLOG_BSC_FLAGS "-verilog" "-elab")
-
   set(BSC_COMMAND ${BSC_BIN} ${VLOG_BSC_FLAGS})
 
   # 1. Partial compilation
@@ -295,17 +293,15 @@ endfunction()
 
 function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
   cmake_parse_arguments(BSIM_SC ""
-                           ""
-                           "BSC_FLAGS;SRC_DIRS"
-                           ${ARGN})
+                                ""
+                                "BSC_FLAGS;SRC_DIRS"
+                                ${ARGN})
   # Create Bluesim subtarget
   set(BSIM_TARGET "${TARGET}.SystemC.${TOP_MODULE}")
 
   # Generate simulation sources under TARGET's binary directory
   get_target_property(BINARY_DIR ${TARGET} BINARY_DIR)
-  set(SIMDIR ${BINARY_DIR}/CMakeFiles/${TARGET}.dir)
-  file(MAKE_DIRECTORY ${SIMDIR})
-
+  set(SIMDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir)
   set(GENERATED_SC_SOURCE "${SIMDIR}/${TOP_MODULE}_systemc.cxx")
   set(GENERATED_SC_HEADER "${SIMDIR}/${TOP_MODULE}_systemc.h")
   set(GENERATED_SC_OBJECT "${SIMDIR}/${TOP_MODULE}_systemc.o")
@@ -321,27 +317,21 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
   # Use absolute path
   get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
 
-  # Set bsc search path
-  set(_BSC_PATH "%/Libraries:${CMAKE_CURRENT_SOURCE_DIR}")
-  foreach(DIR ${BSIM_SC_SRC_DIRS})
-    get_filename_component(ABS_DIR ${DIR} ABSOLUTE)
-    string(APPEND _BSC_PATH ":${ABS_DIR}")
-  endforeach()
-  list(APPEND BSIM_SC_BSC_FLAGS "-p" ${_BSC_PATH})
-
-  get_target_property(BINARY_DIR ${BSIM_TARGET} BINARY_DIR)
-  set(BDIR ${BINARY_DIR}/CMakeFiles/${BSIM_TARGET}.dir/${TOP_MODULE}.dir)
+  # Make output paths for blue objects
+  set(BDIR ${SIMDIR}/${TOP_MODULE}.dir)
   file(MAKE_DIRECTORY ${BDIR})
 
+  # Setup search and output path
+  _bsc_setup_search_path(BSIM_SC_BSC_FLAGS BSIM_SC_SRC_DIRS)
   list(APPEND BSIM_SC_BSC_FLAGS "-bdir" ${BDIR})
   list(APPEND BSIM_SC_BSC_FLAGS "-info-dir" ${BDIR})
   list(APPEND BSIM_SC_BSC_FLAGS "-simdir" ${SIMDIR})
 
   # Flags for Bluesim and elaboration
   list(PREPEND BSIM_SC_BSC_FLAGS "-sim" "-elab")
-
   set(BSC_COMMAND ${BSC_BIN} ${BSIM_SC_BSC_FLAGS})
 
+  # 1. Partial compilation
   _bsc_compile_recursively(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${BSIM_SC_BSC_FLAGS})
 
   # 2. Bluesim code generation
@@ -357,8 +347,8 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
 
   # Compiled files
   set(GENERATED_CXX_SOURCES "${TOP_MODULE}.cxx" "model_${TOP_MODULE}.cxx")
-  set(GENERATED_CXX_HEADERS "${TOP_MODULE}.h" "model_${TOP_MODULE}.h")
-  set(GENERATED_CXX_OBJECTS "${TOP_MODULE}.o" "model_${TOP_MODULE}.o")
+  set(GENERATED_CXX_HEADERS "${TOP_MODULE}.h"   "model_${TOP_MODULE}.h")
+  set(GENERATED_CXX_OBJECTS "${TOP_MODULE}.o"   "model_${TOP_MODULE}.o")
 
   # All bluesim targets
   list(TRANSFORM GENERATED_CXX_SOURCES PREPEND ${SIMDIR}/)
