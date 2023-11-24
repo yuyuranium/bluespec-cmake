@@ -27,7 +27,7 @@ cmake_host_system_information(RESULT NPROC
                               QUERY NUMBER_OF_PHYSICAL_CORES)
 
 function(_bsc_find_systemc SYSTEMC_HOME)
-  if(NOT BSC::systemc)
+  if(NOT TARGET BSC::systemc)
     # Use BSC defined env variable
     find_path(SYSTEMC_INCLUDE NAMES systemc.h
       HINTS "${SYSTEMC}" ENV SYSTEMC
@@ -80,8 +80,7 @@ function(_bsc_find_bluesim BLUESIM_INCLUDE)
   get_filename_component(BSC_BIN_PATH "${BSC_BIN}" PATH)
   set(_BSC_LIB_PATH "${BSC_BIN_PATH}/../lib/Bluesim")
 
-  if(NOT BSC::bskernel OR NOT BSC::bsprim)
-
+  if(NOT TARGET BSC::bskernel AND NOT TARGET BSC::bsprim)
     find_library(BLUESIM_BSKERNEL NAMES bskernel
       HINTS "${_BSC_LIB_PATH}" ENV BLUESPECDIR)
 
