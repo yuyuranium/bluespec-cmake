@@ -14,6 +14,8 @@ find_program(BLUETCL_BIN
   NAMES bluetcl
   DOC "Bluetcl")
 
+find_program(CMAKE_AR ar)
+
 if(NOT BSC_BIN)
   message(FATAL_ERROR "Bluespec compiler binary not found!")
 endif()
@@ -212,9 +214,9 @@ function(add_bsim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
 
   # Setup search and output path
   _bsc_setup_search_path(BSIM_BSC_FLAGS BSIM_SRC_DIRS)
-  list(APPEND BSIM_BSC_FLAGS "-bdir" ${BDIR})
+  list(APPEND BSIM_BSC_FLAGS "-bdir"     ${BDIR})
   list(APPEND BSIM_BSC_FLAGS "-info-dir" ${BDIR})
-  list(APPEND BSIM_BSC_FLAGS "-simdir" ${SIMDIR})
+  list(APPEND BSIM_BSC_FLAGS "-simdir"   ${SIMDIR})
 
   # Flags for Bluesim and elaboration
   list(PREPEND BSIM_BSC_FLAGS "-sim" "-elab")
@@ -287,9 +289,9 @@ function(emit_verilog TOP_MODULE ROOT_SOURCE)
 
   # Setup search and output path
   _bsc_setup_search_path(VLOG_BSC_FLAGS VLOG_SRC_DIRS)
-  list(APPEND VLOG_BSC_FLAGS "-bdir" ${BDIR})
+  list(APPEND VLOG_BSC_FLAGS "-bdir"     ${BDIR})
   list(APPEND VLOG_BSC_FLAGS "-info-dir" ${BDIR})
-  list(APPEND VLOG_BSC_FLAGS "-vdir" ${VDIR})
+  list(APPEND VLOG_BSC_FLAGS "-vdir"     ${VDIR})
 
   # Flags for Bluesim and elaboration
   list(PREPEND VLOG_BSC_FLAGS "-verilog" "-elab")
@@ -319,15 +321,16 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
 
   # Generate simulation sources under TARGET's binary directory
   get_target_property(BINARY_DIR ${TARGET} BINARY_DIR)
-  set(SIMDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir)
+  set(SIMDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${BSIM_TARGET}.dir)
   set(GENERATED_SC_SOURCE "${SIMDIR}/${TOP_MODULE}_systemc.cxx")
   set(GENERATED_SC_HEADER "${SIMDIR}/${TOP_MODULE}_systemc.h")
   set(GENERATED_SC_OBJECT "${SIMDIR}/${TOP_MODULE}_systemc.o")
   set(SC_TARGETS ${GENERATED_SC_SOURCE}
                  ${GENERATED_SC_HEADER}
                  ${GENERATED_SC_OBJECT})
+  set(LIB_TOP_MODULE "${SIMDIR}/lib${TOP_MODULE}.a")
 
-  add_custom_target(${BSIM_TARGET} ALL DEPENDS ${SC_TARGETS})
+  add_custom_target(${BSIM_TARGET} ALL DEPENDS ${SC_TARGETS} ${LIB_TOP_MODULE})
 
   # Add dependency to the target
   add_dependencies(${TARGET} ${BSIM_TARGET})
@@ -341,9 +344,9 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
 
   # Setup search and output path
   _bsc_setup_search_path(BSIM_SC_BSC_FLAGS BSIM_SC_SRC_DIRS)
-  list(APPEND BSIM_SC_BSC_FLAGS "-bdir" ${BDIR})
+  list(APPEND BSIM_SC_BSC_FLAGS "-bdir"     ${BDIR})
   list(APPEND BSIM_SC_BSC_FLAGS "-info-dir" ${BDIR})
-  list(APPEND BSIM_SC_BSC_FLAGS "-simdir" ${SIMDIR})
+  list(APPEND BSIM_SC_BSC_FLAGS "-simdir"   ${SIMDIR})
 
   # Flags for Bluesim and elaboration
   list(PREPEND BSIM_SC_BSC_FLAGS "-sim" "-elab")
@@ -390,8 +393,19 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
     COMMENT "Generating SystemC model for ${TOP_MODULE}"
     VERBATIM)
 
+  # 4. Link generated object into a static library
+  get_filename_component(PKG_NAME ${ROOT_SOURCE} NAME_WE)  # Assume package name is file name
+  set(GET_OBJ_COMMAND "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/synmodules.tcl"
+                      "-p" "%/Libraries:${BDIR}" "${PKG_NAME}")
+  add_custom_command(
+    OUTPUT  ${LIB_TOP_MODULE}
+    COMMAND "${CMAKE_AR}" "rcs" ${LIB_TOP_MODULE} `${GET_OBJ_COMMAND}` ${GENERATED_CXX_OBJECTS}
+    WORKING_DIRECTORY ${SIMDIR}
+    DEPENDS ${BSIM_SC_TARGETS}
+  )
+
   _bsc_find_bluesim(BLUESIM_INCLUDE)
   target_include_directories(${TARGET} PUBLIC ${SIMDIR} ${BLUESIM_INCLUDE})
-  target_link_libraries(${TARGET} ${GENERATED_CXX_OBJECTS} ${GENERATED_SC_OBJECT}
+  target_link_libraries(${TARGET} ${GENERATED_SC_OBJECT} ${LIB_TOP_MODULE}
                                   BSC::systemc BSC::bskernel BSC::bsprim)
 endfunction()
