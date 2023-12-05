@@ -177,20 +177,69 @@ function(_bsc_compile_recursively BLUESPEC_OBJECTS ROOT_SOURCE)
 endfunction()
 
 # Macro to setup search path
-macro(_bsc_setup_search_path BSC_FLAGS SRC_DIRS)
+macro(_bsc_setup_search_path BSC_FLAGS SRC_DIRS LINK_LIBS)
   # Set bsc search path
-  set(_BSC_PATH "%/Libraries:${CMAKE_CURRENT_SOURCE_DIR}")
+  set(_BSC_PATH "%/Libraries" ${CMAKE_CURRENT_SOURCE_DIR})
+  # Source directories (*.bsv)
   foreach(DIR ${${SRC_DIRS}})
     get_filename_component(ABS_DIR ${DIR} ABSOLUTE)
-    string(APPEND _BSC_PATH ":${ABS_DIR}")
+    list(APPEND _BSC_PATH ${ABS_DIR})
   endforeach()
-  list(APPEND ${BSC_FLAGS} "-p" ${_BSC_PATH})
+  # Library directories (*.bo)
+  foreach(LIB ${${LINK_LIBS}})
+    get_target_property(LINK_DIR ${LIB} LINK_DIRECTORIES)
+    get_filename_component(ABS_DIR ${LINK_DIR} ABSOLUTE)
+    list(APPEND _BSC_PATH ${ABS_DIR})
+  endforeach()
+  list(REMOVE_DUPLICATES _BSC_PATH)
+  list(JOIN _BSC_PATH ":" _BSC_PATH_STR)
+  list(APPEND ${BSC_FLAGS} "-p" ${_BSC_PATH_STR})
 endmacro()
+
+function(add_bo_library ROOT_SOURCE)
+  cmake_parse_arguments(BO ""
+                           ""
+                           "BSC_FLAGS;SRC_DIRS;LINK_LIBS"
+                           ${ARGN})
+  get_filename_component(PKG_NAME ${ROOT_SOURCE} NAME_WE)  # Assume package name is file name
+  set(TARGET ${PKG_NAME})
+  if(CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+    set(BDIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Libraries)
+    file(MAKE_DIRECTORY ${BDIR})
+  else()
+    set(BDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir)
+  endif()
+  set(GENERATED_BLUESIM_LIB ${BDIR}/${PKG_NAME}.bo)
+
+  add_custom_target(${TARGET} ALL DEPENDS ${GENERATED_BLUESIM_LIB})
+  if(BO_LINK_LIBS)
+    add_dependencies(${TARGET} ${BO_LINK_LIBS})
+  endif()
+  set_target_properties(
+    ${TARGET}
+    PROPERTIES
+      LINK_DIRECTORIES ${BDIR}
+  )
+
+  # Use absolute path
+  get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
+
+  _bsc_setup_search_path(BO_BSC_FLAGS BO_SRC_DIRS BO_LINK_LIBS)
+  list(APPEND BO_BSC_FLAGS "-bdir"     ${BDIR})
+  list(APPEND BO_BSC_FLAGS "-info-dir" ${BDIR})
+
+  # Flags for Bluesim
+  list(PREPEND BSIM_BSC_FLAGS "-sim")
+  set(BSC_COMMAND ${BSC_BIN} ${BO_BSC_FLAGS})
+
+  # Compile to *.bo
+  _bsc_compile_recursively(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${BO_BSC_FLAGS})
+endfunction()
 
 function(add_bsim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
   cmake_parse_arguments(BSIM ""
                              ""
-                             "BSC_FLAGS;LINK_FLAGS;SRC_DIRS"
+                             "BSC_FLAGS;LINK_FLAGS;SRC_DIRS;LINK_LIBS"
                              ${ARGN})
   # Create Bluesim target
   set(TARGET "Bluesim.${SIM_EXE}")
@@ -205,6 +254,9 @@ function(add_bsim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
     set(SIM_EXE_SO ${SIMDIR}/${SIM_EXE}.so)
   endif()
   add_custom_target(${TARGET} ALL DEPENDS ${SIM_EXE_BIN})
+  if(BSIM_LINK_LIBS)
+    add_dependencies(${TARGET} ${BSIM_LINK_LIBS})
+  endif()
 
   # Use absolute path
   get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
@@ -214,7 +266,7 @@ function(add_bsim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
   file(MAKE_DIRECTORY ${BDIR})
 
   # Setup search and output path
-  _bsc_setup_search_path(BSIM_BSC_FLAGS BSIM_SRC_DIRS)
+  _bsc_setup_search_path(BSIM_BSC_FLAGS BSIM_SRC_DIRS BSIM_LINK_LIBS)
   list(APPEND BSIM_BSC_FLAGS "-bdir"     ${BDIR})
   list(APPEND BSIM_BSC_FLAGS "-info-dir" ${BDIR})
   list(APPEND BSIM_BSC_FLAGS "-simdir"   ${SIMDIR})
@@ -266,7 +318,7 @@ endfunction()
 function(emit_verilog TOP_MODULE ROOT_SOURCE)
   cmake_parse_arguments(VLOG ""
                              ""
-                             "BSC_FLAGS;SRC_DIRS"
+                             "BSC_FLAGS;SRC_DIRS;LINK_LIBS"
                              ${ARGN})
   # Create Verilog target
   set(TARGET "Verilog.${TOP_MODULE}")
@@ -280,6 +332,9 @@ function(emit_verilog TOP_MODULE ROOT_SOURCE)
   set(GENERATED_VLOG_SOURCE ${VDIR}/${TOP_MODULE}.v)
 
   add_custom_target(${TARGET} ALL DEPENDS ${GENERATED_VLOG_SOURCE})
+  if(VLOG_LINK_LIBS)
+    add_dependencies(${TARGET} ${VLOG_LINK_LIBS})
+  endif()
 
   # Use absolute path
   get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
@@ -289,7 +344,7 @@ function(emit_verilog TOP_MODULE ROOT_SOURCE)
   file(MAKE_DIRECTORY ${BDIR})
 
   # Setup search and output path
-  _bsc_setup_search_path(VLOG_BSC_FLAGS VLOG_SRC_DIRS)
+  _bsc_setup_search_path(VLOG_BSC_FLAGS VLOG_SRC_DIRS VLOG_LINK_LIBS)
   list(APPEND VLOG_BSC_FLAGS "-bdir"     ${BDIR})
   list(APPEND VLOG_BSC_FLAGS "-info-dir" ${BDIR})
   list(APPEND VLOG_BSC_FLAGS "-vdir"     ${VDIR})
@@ -315,7 +370,7 @@ endfunction()
 function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
   cmake_parse_arguments(BSIM_SC ""
                                 ""
-                                "BSC_FLAGS;SRC_DIRS"
+                                "BSC_FLAGS;SRC_DIRS;LINK_LIBS"
                                 ${ARGN})
   # Create Bluesim subtarget
   set(BSIM_TARGET "${TARGET}.SystemC.${TOP_MODULE}")
@@ -332,6 +387,9 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
   set(LIB_TOP_MODULE "${SIMDIR}/lib${TOP_MODULE}.a")
 
   add_custom_target(${BSIM_TARGET} ALL DEPENDS ${SC_TARGETS} ${LIB_TOP_MODULE})
+  if(BSIM_SC_LINK_LIBS)
+    add_dependencies(${BSIM_TARGET} ${BSIM_SC_LINK_LIBS})
+  endif()
 
   # Add dependency to the target
   add_dependencies(${TARGET} ${BSIM_TARGET})
@@ -344,7 +402,7 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
   file(MAKE_DIRECTORY ${BDIR})
 
   # Setup search and output path
-  _bsc_setup_search_path(BSIM_SC_BSC_FLAGS BSIM_SC_SRC_DIRS)
+  _bsc_setup_search_path(BSIM_SC_BSC_FLAGS BSIM_SC_SRC_DIRS BSIM_SC_LINK_LIBS)
   list(APPEND BSIM_SC_BSC_FLAGS "-bdir"     ${BDIR})
   list(APPEND BSIM_SC_BSC_FLAGS "-info-dir" ${BDIR})
   list(APPEND BSIM_SC_BSC_FLAGS "-simdir"   ${SIMDIR})
