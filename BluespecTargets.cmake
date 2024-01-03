@@ -455,10 +455,11 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
   # 4. Link generated object into a static library
   get_filename_component(PKG_NAME ${ROOT_SOURCE} NAME_WE)  # Assume package name is file name
   set(GET_OBJ_COMMAND "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/synmodules.tcl"
-                      "-p" "%/Libraries:${BDIR}" "${PKG_NAME}")
+                      ${BSIM_SC_BSC_FLAGS} "${PKG_NAME}")
   add_custom_command(
     OUTPUT  ${LIB_TOP_MODULE}
-    COMMAND "${CMAKE_AR}" "rcs" ${LIB_TOP_MODULE} `${GET_OBJ_COMMAND}` ${GENERATED_CXX_OBJECTS}
+    COMMAND "${CMAKE_AR}" "rcs" ${LIB_TOP_MODULE} `${GET_OBJ_COMMAND} | xargs ls -d 2> /dev/null`
+            ${GENERATED_CXX_OBJECTS}
     WORKING_DIRECTORY ${SIMDIR}
     DEPENDS ${BSIM_SC_TARGETS}
   )
