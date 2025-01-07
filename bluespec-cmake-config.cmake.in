@@ -1,0 +1,3 @@
+@PACKAGE_INIT@
+
+include(@INSTALL_DIR@/BluespecTargets.cmake)

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env sh
 ##
 ## tcl procedures to output all generated object files of all modules that are
 ## marked "synthesize" in a bluespec package
