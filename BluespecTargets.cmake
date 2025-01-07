@@ -5,7 +5,7 @@ if(__add_bluespec)
 endif()
 set(__add_bluespec ON)
 
-include(FindBluespecToolchain)
+include(BluespecUtils)
 
 # Get number of pyhsical cores
 cmake_host_system_information(RESULT NPROC
@@ -61,86 +61,6 @@ function(_bsc_find_systemc SYSTEMC_HOME)
   endif()
 endfunction()
 
-# Helper function to compile a root source file recursively
-function(_bsc_compile_recursively BLUESPEC_OBJECTS ROOT_SOURCE)
-  cmake_parse_arguments("" ""
-                           ""
-                           "BSC_FLAGS"
-                           ${ARGN})
-
-  # Setup BSC command
-  set(BSC_COMMAND ${BSC_BIN} ${_BSC_FLAGS})
-
-  # Setup Bluetcl options
-  set(DEP_CHECK ${BLUETCL_BIN} "-exec" "makedepend" ${_BSC_FLAGS}
-                ${ROOT_SOURCE})
-
-  # Bluespec objects
-  set(_BLUESPEC_OBJECTS "")
-
-  message(STATUS "Checking dependencies for ${ROOT_SOURCE}")
-  execute_process(
-    COMMAND         ${DEP_CHECK}
-    RESULT_VARIABLE DEP_CHECK_RESULT
-    OUTPUT_VARIABLE DEP_CHECK_OUTPUT)
-
-  if(NOT ${DEP_CHECK_RESULT} EQUAL "0")
-    message(FATAL_ERROR "Checking dependencies for ${ROOT_SOURCE} - failed")
-  endif()
-
-  # Split the output string to list
-  string(REPLACE "\n" ";" DEP_LIST ${DEP_CHECK_OUTPUT})
-  foreach(LINE ${DEP_LIST})
-    # Line starts with a '#' is a comment, skip it
-    string(FIND ${LINE} "#" IS_NOT_DEP)
-    if(${IS_NOT_DEP} EQUAL "0")
-      continue()
-    endif()
-
-    # Split make-style dependency expression into target and its dependencies
-    string(REPLACE ":" ";" TARGET_DEPS ${LINE})
-    list(GET TARGET_DEPS 0 TARGET) # before the colon is the target
-    list(GET TARGET_DEPS 1 DEPS)   # after the colon is its dependencies
-
-    list(APPEND _BLUESPEC_OBJECTS ${TARGET}) # add bluespec object target
-
-    string(REPLACE "\t" "" DEPS ${DEPS}) # remove tabs
-    separate_arguments(DEPS)             # convert to list
-
-    list(GET DEPS 0 SRC) # first dependency is the source file
-
-    # Command to build the target
-    add_custom_command(
-      OUTPUT  ${TARGET}
-      COMMAND ${BSC_COMMAND} ${SRC}
-      DEPENDS ${DEPS})
-  endforeach()
-
-  # Return the bluespec objects
-  set(${BLUESPEC_OBJECTS} ${_BLUESPEC_OBJECTS} PARENT_SCOPE)
-  message(STATUS "Checking dependencies for ${ROOT_SOURCE} - done")
-endfunction()
-
-# Macro to setup search path
-macro(_bsc_setup_search_path BSC_FLAGS SRC_DIRS LINK_LIBS)
-  # Set bsc search path
-  set(_BSC_PATH "%/Libraries" ${CMAKE_CURRENT_SOURCE_DIR})
-  # Source directories (*.bsv)
-  foreach(DIR ${${SRC_DIRS}})
-    get_filename_component(ABS_DIR ${DIR} ABSOLUTE)
-    list(APPEND _BSC_PATH ${ABS_DIR})
-  endforeach()
-  # Library directories (*.bo)
-  foreach(LIB ${${LINK_LIBS}})
-    get_target_property(LINK_DIR ${LIB} LINK_DIRECTORIES)
-    get_filename_component(ABS_DIR ${LINK_DIR} ABSOLUTE)
-    list(APPEND _BSC_PATH ${ABS_DIR})
-  endforeach()
-  list(REMOVE_DUPLICATES _BSC_PATH)
-  list(JOIN _BSC_PATH ":" _BSC_PATH_STR)
-  list(APPEND ${BSC_FLAGS} "-p" ${_BSC_PATH_STR})
-endmacro()
-
 function(add_bo_library ROOT_SOURCE)
   cmake_parse_arguments(BO ""
                            ""
@@ -160,6 +80,7 @@ function(add_bo_library ROOT_SOURCE)
   if(BO_LINK_LIBS)
     add_dependencies(${TARGET} ${BO_LINK_LIBS})
   endif()
+
   set_target_properties(
     ${TARGET}
     PROPERTIES
@@ -169,16 +90,24 @@ function(add_bo_library ROOT_SOURCE)
   # Use absolute path
   get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
 
-  _bsc_setup_search_path(BO_BSC_FLAGS BO_SRC_DIRS BO_LINK_LIBS)
-  list(APPEND BO_BSC_FLAGS "-bdir"     ${BDIR})
-  list(APPEND BO_BSC_FLAGS "-info-dir" ${BDIR})
+  bsc_setup_path_flags(BO_BSC_FLAGS
+    BDIR ${BDIR}
+    INFO_DIR ${BDIR}
+    SRC_DIRS
+      ${BO_SRC_DIRS}
+    LINK_LIBS
+      ${BO_LINK_LIBS}
+  )
 
   # Flags for Bluesim
   list(PREPEND BSIM_BSC_FLAGS "-sim")
   set(BSC_COMMAND ${BSC_BIN} ${BO_BSC_FLAGS})
 
   # Compile to *.bo
-  _bsc_compile_recursively(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${BO_BSC_FLAGS})
+  bsc_pre_elaboration(BLUE_OBJECTS ${ROOT_SOURCE}
+    BSC_FLAGS
+      ${BO_BSC_FLAGS}
+  )
 endfunction()
 
 function(add_bsim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
@@ -211,17 +140,22 @@ function(add_bsim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
   file(MAKE_DIRECTORY ${BDIR})
 
   # Setup search and output path
-  _bsc_setup_search_path(BSIM_BSC_FLAGS BSIM_SRC_DIRS BSIM_LINK_LIBS)
-  list(APPEND BSIM_BSC_FLAGS "-bdir"     ${BDIR})
-  list(APPEND BSIM_BSC_FLAGS "-info-dir" ${BDIR})
-  list(APPEND BSIM_BSC_FLAGS "-simdir"   ${SIMDIR})
+  bsc_setup_path_flags(BSIM_BSC_FLAGS
+    BDIR     ${BDIR}
+    INFO_DIR ${BDIR}
+    SIMDIR   ${SIMDIR}
+    SRC_DIRS 
+      ${BSIM_SRC_DIRS}
+    LINK_LIBS
+      ${BSIM_LINK_LIBS}
+  )
 
   # Flags for Bluesim and elaboration
   list(PREPEND BSIM_BSC_FLAGS "-sim" "-elab")
   set(BSC_COMMAND ${BSC_BIN} ${BSIM_BSC_FLAGS})
 
   # 1. Partial compilation
-  _bsc_compile_recursively(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${BSIM_BSC_FLAGS})
+  bsc_pre_elaboration(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${BSIM_BSC_FLAGS})
 
   # 2. Bluesim code generation
   set(ELAB_MODULE ${BDIR}/${TOP_MODULE}.ba)
@@ -289,17 +223,22 @@ function(emit_verilog TOP_MODULE ROOT_SOURCE)
   file(MAKE_DIRECTORY ${BDIR})
 
   # Setup search and output path
-  _bsc_setup_search_path(VLOG_BSC_FLAGS VLOG_SRC_DIRS VLOG_LINK_LIBS)
-  list(APPEND VLOG_BSC_FLAGS "-bdir"     ${BDIR})
-  list(APPEND VLOG_BSC_FLAGS "-info-dir" ${BDIR})
-  list(APPEND VLOG_BSC_FLAGS "-vdir"     ${VDIR})
+  bsc_setup_path_flags(VLOG_BSC_FLAGS
+    BDIR ${BDIR}
+    INFO_DIR ${BDIR}
+    VDIR ${VDIR}
+    SRC_DIRS 
+      ${VLOG_SRC_DIRS}
+    LINK_LIBS
+      ${VLOG_LINK_LIBS}
+  )
 
   # Flags for Bluesim and elaboration
   list(PREPEND VLOG_BSC_FLAGS "-verilog" "-elab")
   set(BSC_COMMAND ${BSC_BIN} ${VLOG_BSC_FLAGS})
 
   # 1. Partial compilation
-  _bsc_compile_recursively(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${VLOG_BSC_FLAGS})
+  bsc_pre_elaboration(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${VLOG_BSC_FLAGS})
 
   # 2. Verilog code generation
   add_custom_command(
@@ -347,17 +286,22 @@ function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
   file(MAKE_DIRECTORY ${BDIR})
 
   # Setup search and output path
-  _bsc_setup_search_path(BSIM_SC_BSC_FLAGS BSIM_SC_SRC_DIRS BSIM_SC_LINK_LIBS)
-  list(APPEND BSIM_SC_BSC_FLAGS "-bdir"     ${BDIR})
-  list(APPEND BSIM_SC_BSC_FLAGS "-info-dir" ${BDIR})
-  list(APPEND BSIM_SC_BSC_FLAGS "-simdir"   ${SIMDIR})
+  bsc_setup_path_flags(BSIM_SC_BSC_FLAGS
+    BDIR ${BIDR}
+    INFO_DIR ${INFO_DIR}
+    SIMDIR ${SIMDIR}
+    SRC_DIRS
+      ${BSIM_SC_SRC_DIRS}
+    LINK_LIBS
+      ${BSIM_SC_LINK_LIBS}
+  )
 
   # Flags for Bluesim and elaboration
   list(PREPEND BSIM_SC_BSC_FLAGS "-sim" "-elab")
   set(BSC_COMMAND ${BSC_BIN} ${BSIM_SC_BSC_FLAGS})
 
   # 1. Partial compilation
-  _bsc_compile_recursively(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${BSIM_SC_BSC_FLAGS})
+  bsc_pre_elaboration(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${BSIM_SC_BSC_FLAGS})
 
   # 2. Bluesim code generation
   set(ELAB_MODULE ${BDIR}/${TOP_MODULE}.ba)

@@ -14,6 +14,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   install(
     FILES
       ./BluespecTargets.cmake
+      ./BluespecUtils.cmake
       ./FindBluespecToolchain.cmake
     DESTINATION
       ${INSTALL_DIR}
