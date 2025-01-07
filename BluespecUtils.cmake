@@ -7,10 +7,27 @@ set(_BLUESPEC_UTILS)
 
 include(FindBluespecToolchain)
 
+# Function: bsc_package_name
+#   Compute the package name of given bsv source. See 2.1 Components of a BSV Design.
+#   All BSV code is assumed to be inside a package. Furthermore BSC and other tools assume that
+#   there is one package per file, and they use the package name to derive the file name.
+#
+# Arguments:
+#   PKG_NAME - (Output) Package name of the bsv source.
+#   SOURCE   - Source file (*.bsv).
+function(bsc_package_name PKG_NAME SOURCE)
+  get_filename_component(_PKG_NAME ${SOURCE} NAME_WE)
+  get_filename_component(_EXT ${SOURCE} EXT)
+  # Make sure file extension is bsv.
+  if(${_EXT} STREQUAL ".bsv")
+    set(${PKG_NAME} ${_PKG_NAME} PARENT_SCOPE)
+  endif()
+endfunction()
+
 # Function: bsc_setup_path_flags
 #   Setup all search paths and modified the bsc flags. See 3.6 Setting the path.
 #
-# Parameters:
+# Arguments:
 #   BSC_FLAGS - (Inout) List of compilation flags with search paths set up.
 #   BDIR      - Output directory for .bo and .ba files (-bdir).
 #   SIMDIR    - Output directory for Bluesim intermediate files (-simdir).
@@ -116,6 +133,7 @@ function(bsc_pre_elaboration BLUESPEC_OBJECTS ROOT_SOURCE)
     list(GET TARGET_DEPS 1 DEPS)   # after the colon is its dependencies
 
     list(APPEND _BLUESPEC_OBJECTS ${TARGET}) # add bluespec object target
+    string(REPLACE "${CMAKE_BINARY_DIR}/" "" TARGET_PATH ${TARGET})
 
     string(REPLACE "\t" "" DEPS ${DEPS}) # remove tabs
     separate_arguments(DEPS)             # convert to list
@@ -125,10 +143,9 @@ function(bsc_pre_elaboration BLUESPEC_OBJECTS ROOT_SOURCE)
     # Command to build the target
     add_custom_command(
       OUTPUT ${TARGET}
-      COMMAND
-        ${BSC_COMMAND} ${SRC}
-      DEPENDS
-        ${DEPS})
+      COMMAND ${BSC_COMMAND} ${SRC}
+      COMMENT "Building Bluespec object ${TARGET_PATH}"
+      DEPENDS ${DEPS})
   endforeach()
 
   # Return the bluespec objects

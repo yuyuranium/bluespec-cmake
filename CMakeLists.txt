@@ -13,6 +13,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   # Install CMake scripts
   install(
     FILES
+      ./BluespecLibrary.cmake
       ./BluespecTargets.cmake
       ./BluespecUtils.cmake
       ./FindBluespecToolchain.cmake
