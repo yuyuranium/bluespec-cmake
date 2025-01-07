@@ -5,24 +5,7 @@ if(__add_bluespec)
 endif()
 set(__add_bluespec ON)
 
-# We need Bluespec compiler and Bluetcl
-find_program(BSC_BIN
-  NAMES bsc
-  DOC "Bluespec compiler")
-
-find_program(BLUETCL_BIN
-  NAMES bluetcl
-  DOC "Bluetcl")
-
-find_program(CMAKE_AR ar)
-
-if(NOT BSC_BIN)
-  message(FATAL_ERROR "Bluespec compiler binary not found!")
-endif()
-
-if(NOT BLUETCL_BIN)
-  message(FATAL_ERROR "Bluetcl binary not found!")
-endif()
+include(FindBluespecToolchain)
 
 # Get number of pyhsical cores
 cmake_host_system_information(RESULT NPROC
@@ -76,44 +59,6 @@ function(_bsc_find_systemc SYSTEMC_HOME)
     get_filename_component(_SYSTEMC_HOME ${SYSTEMC_INCLUDE} DIRECTORY)
     set(SYSTEMC_HOME ${_SYSTEMC_HOME} PARENT_SCOPE)
   endif()
-endfunction()
-
-function(_bsc_find_bluesim BLUESIM_INCLUDE)
-  get_filename_component(BSC_BIN_PATH "${BSC_BIN}" PATH)
-  set(_BSC_LIB_PATH "${BSC_BIN_PATH}/../lib/Bluesim")
-
-  if(NOT TARGET BSC::bskernel AND NOT TARGET BSC::bsprim)
-    find_library(BLUESIM_BSKERNEL NAMES bskernel
-      HINTS "${_BSC_LIB_PATH}" ENV BLUESPECDIR)
-
-    find_library(BLUESIM_BSPRIME NAMES bsprim
-      HINTS "${_BSC_LIB_PATH}" ENV BLUESPECDIR)
-
-    if(BLUESIM_BSKERNEL AND BLUESIM_BSPRIME)
-      add_library(BSC::bskernel INTERFACE IMPORTED)
-      set_target_properties(BSC::bskernel
-        PROPERTIES
-          INTERFACE_INCLUDE_DIRECTORIES "${BLUESIM_BSKERNEL}"
-          INTERFACE_LINK_LIBRARIES "${BLUESIM_BSKERNEL}")
-
-      add_library(BSC::bsprim INTERFACE IMPORTED)
-      set_target_properties(BSC::bsprim
-        PROPERTIES
-          INTERFACE_INCLUDE_DIRECTORIES "${BLUESIM_BSPRIME}"
-          INTERFACE_LINK_LIBRARIES "${BLUESIM_BSPRIME}")
-
-      # Return Bluesim include library
-      set(${BLUESIM_INCLUDE} ${_BSC_LIB_PATH} PARENT_SCOPE)
-      return()
-    endif()
-    message("Bluesim library not found. This can be fixed by setting BLUESPECDIR (environment) variable")
-    message(FATAL_ERROR "Bluesim library not found")
-  else()
-    set(${BLUESIM_INCLUDE} ${_BSC_LIB_PATH} PARENT_SCOPE)
-  endif()
-endfunction()
-
-function(_bsc_link_bluesim)
 endfunction()
 
 # Helper function to compile a root source file recursively

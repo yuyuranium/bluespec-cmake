@@ -1,3 +1,5 @@
 @PACKAGE_INIT@
 
-include(@INSTALL_DIR@/BluespecTargets.cmake)
+list(APPEND CMAKE_MODULE_PATH @INSTALL_DIR@)
+
+include(BluespecTargets)
