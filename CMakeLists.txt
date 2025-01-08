@@ -13,6 +13,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   # Install CMake scripts
   install(
     FILES
+      ./BluesimExecutable.cmake
       ./BluespecLibrary.cmake
       ./BluespecTargets.cmake
       ./BluespecUtils.cmake

@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
 
-if(_ADD_BSC_LIBRARY)
+if(_BLUESPEC_LIBRARY)
   return()
 endif()
-set(_ADD_BSC_LIBRARY)
+set(_BLUESPEC_LIBRARY)
 
 include(BluespecUtils)
 

@@ -6,6 +6,7 @@ endif()
 set(_BLUESPEC_UTILS)
 
 include(FindBluespecToolchain)
+include(ProcessorCount)
 
 # Function: bsc_package_name
 #   Compute the package name of given bsv source. See 2.1 Components of a BSV Design.
@@ -80,6 +81,60 @@ function(bsc_setup_path_flags BSC_FLAGS)
   list(APPEND _BSC_FLAGS "-p" ${_BSC_PATH_STR})
 
   set(${BSC_FLAGS} ${_BSC_FLAGS} PARENT_SCOPE)
+endfunction()
+
+# Function: bsc_get_parallel_sim_link_jobs
+#   Get the number of jobs for parallel sim link.
+#
+# Argument:
+#   JOBS - (Output) Number of jobs for parallel sim link.
+function(bsc_get_parallel_sim_link_jobs JOBS)
+  ProcessorCount(_JOBS)
+  if(NOT _JOBS)
+    set(_JOBS 4) # Use 4 if we cannot get number of processor count
+  endif()
+  set(${JOBS} ${_JOBS} PARENT_SCOPE)
+endfunction()
+
+# Function: bsc_setup_sim_flags
+#   Setup bsc flags for Bluesim. See 3.1 Common compile and linking flags.
+#
+# Arguments:
+#   BSC_FLAGS - (Inout) List of compilation flags with search paths set up.
+#   SIMDIR    - Output directory for Bluesim intermediate files (-simdir).
+function(bsc_setup_sim_flags BSC_FLAGS)
+  set(_BSC_FLAGS ${${BSC_FLAGS}})
+  list(PREPEND _BSC_FLAGS "-sim" "-elab")
+  set(${BSC_FLAGS} ${_BSC_FLAGS} PARENT_SCOPE)
+endfunction()
+
+# Function: bsc_get_bluesim_targets
+#   Determine all generated Bluesim targets.
+#
+# Arguments:
+#   BLUESIM_TARGETS - (Output) A list of paths to the Bluesim targets.
+#   TOP_MODULE      - Top module to generate the Bluesim executable.
+function(bsc_get_bluesim_targets BLUESIM_TARGETS TOP_MODULE)
+  cmake_parse_arguments("" ""
+                           "SIMDIR"
+                           ""
+                           ${ARGN})
+  # Compiled files
+  set(GENERATED_CXX_SOURCES "${TOP_MODULE}.cxx" "model_${TOP_MODULE}.cxx")
+  set(GENERATED_CXX_HEADERS "${TOP_MODULE}.h"   "model_${TOP_MODULE}.h")
+  set(GENERATED_CXX_OBJECTS "${TOP_MODULE}.o"   "model_${TOP_MODULE}.o")
+
+  # All bluesim targets
+  if(_SIMDIR)
+    list(TRANSFORM GENERATED_CXX_SOURCES PREPEND ${SIMDIR}/)
+    list(TRANSFORM GENERATED_CXX_HEADERS PREPEND ${SIMDIR}/)
+    list(TRANSFORM GENERATED_CXX_OBJECTS PREPEND ${SIMDIR}/)
+  endif()
+
+  set(_BLUESIM_TARGETS ${GENERATED_CXX_SOURCES}
+                       ${GENERATED_CXX_HEADERS}
+                       ${GENERATED_CXX_OBJECTS})
+  set(${BLUESIM_TARGETS} ${_BLUESIM_TARGETS} PARENT_SCOPE)
 endfunction()
 
 # Function: bsc_pre_elaboration
