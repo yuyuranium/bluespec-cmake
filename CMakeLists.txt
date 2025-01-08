@@ -17,6 +17,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
       ./BluespecLibrary.cmake
       ./BluespecTargets.cmake
       ./BluespecUtils.cmake
+      ./BluespecVerilogGeneration.cmake
       ./FindBluespecToolchain.cmake
     DESTINATION
       ${INSTALL_DIR}

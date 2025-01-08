@@ -9,63 +9,7 @@ include(BluespecUtils)
 
 include(BluespecLibrary)
 include(BluesimExecutable)
-
-function(emit_verilog TOP_MODULE ROOT_SOURCE)
-  cmake_parse_arguments(VLOG ""
-                             ""
-                             "BSC_FLAGS;SRC_DIRS;LINK_LIBS"
-                             ${ARGN})
-  # Create Verilog target
-  set(TARGET "Verilog.${TOP_MODULE}")
-  # Prefer CMAKE_LIBRARY_OUTPUT_DIRECTORY
-  if(CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-    set(VDIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Verilog)
-    file(MAKE_DIRECTORY ${VDIR})
-  else()
-    set(VDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir)
-  endif()
-  set(GENERATED_VLOG_SOURCE ${VDIR}/${TOP_MODULE}.v)
-
-  add_custom_target(${TARGET} ALL DEPENDS ${GENERATED_VLOG_SOURCE})
-  if(VLOG_LINK_LIBS)
-    add_dependencies(${TARGET} ${VLOG_LINK_LIBS})
-  endif()
-
-  # Use absolute path
-  get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
-
-  # Make output paths for blue objects
-  set(BDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir/${TOP_MODULE}.dir)
-  file(MAKE_DIRECTORY ${BDIR})
-
-  # Setup search and output path
-  bsc_setup_path_flags(VLOG_BSC_FLAGS
-    BDIR ${BDIR}
-    INFO_DIR ${BDIR}
-    VDIR ${VDIR}
-    SRC_DIRS 
-      ${VLOG_SRC_DIRS}
-    LINK_LIBS
-      ${VLOG_LINK_LIBS}
-  )
-
-  # Flags for Bluesim and elaboration
-  list(PREPEND VLOG_BSC_FLAGS "-verilog" "-elab")
-  set(BSC_COMMAND ${BSC_BIN} ${VLOG_BSC_FLAGS})
-
-  # 1. Partial compilation
-  bsc_pre_elaboration(BLUE_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${VLOG_BSC_FLAGS})
-
-  # 2. Verilog code generation
-  add_custom_command(
-    OUTPUT  ${GENERATED_VLOG_SOURCE}
-    COMMAND ${BSC_COMMAND} "-g" ${TOP_MODULE} ${VLOG_BSC_FLAGS} ${ROOT_SOURCE}
-            && touch ${GENERATED_VLOG_SOURCE}
-    DEPENDS ${BLUE_OBJECTS}
-    COMMENT "Generating Verilog source ${TOP_MODULE}.v"
-    VERBATIM)
-
-endfunction()
+include(BluespecVerilogGeneration)
 
 function(target_link_bsim_systemc TARGET TOP_MODULE ROOT_SOURCE)
   cmake_parse_arguments(BSIM_SC ""

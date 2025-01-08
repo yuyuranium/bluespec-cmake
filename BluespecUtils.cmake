@@ -51,7 +51,7 @@ function(bsc_setup_path_flags BSC_FLAGS)
     list(APPEND _BSC_FLAGS "-simdir" ${_SIMDIR})
   endif()
 
-  if(_VIDR)
+  if(_VDIR)
     list(APPEND _BSC_FLAGS "-vdir" ${_VDIR})
   endif()
 
@@ -101,10 +101,20 @@ endfunction()
 #
 # Arguments:
 #   BSC_FLAGS - (Inout) List of compilation flags with search paths set up.
-#   SIMDIR    - Output directory for Bluesim intermediate files (-simdir).
 function(bsc_setup_sim_flags BSC_FLAGS)
   set(_BSC_FLAGS ${${BSC_FLAGS}})
   list(PREPEND _BSC_FLAGS "-sim" "-elab")
+  set(${BSC_FLAGS} ${_BSC_FLAGS} PARENT_SCOPE)
+endfunction()
+
+# Function: bsc_setup_verilog_flags
+#   Setup bsc flags for verilog generation. See 3.1 Common compile and linking flags.
+#
+# Arguments:
+#   BSC_FLAGS - (Inout) List of compilation flags with search paths set up.
+function(bsc_setup_verilog_flags BSC_FLAGS)
+  set(_BSC_FLAGS ${${BSC_FLAGS}})
+  list(PREPEND _BSC_FLAGS "-verilog" "-elab")
   set(${BSC_FLAGS} ${_BSC_FLAGS} PARENT_SCOPE)
 endfunction()
 
