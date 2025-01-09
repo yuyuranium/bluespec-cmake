@@ -48,7 +48,7 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
     add_dependencies(${TARGET} ${BSIM_LINK_LIBS})
   endif()
 
-  # Make output paths for blue objects
+  # Make output paths for bluespec objects
   set(BDIR ${SIMDIR}/${TOP_MODULE}.dir)
   file(MAKE_DIRECTORY ${BDIR})
 
@@ -82,7 +82,7 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
     VERBATIM
   )
 
-  bsc_get_bluesim_targets(BLUESIM_TARGETS ${TOP_MODULE})
+  bsc_get_bluesim_targets(BLUESIM_TARGETS ${TOP_MODULE} SIMDIR ${SIMDIR})
   bsc_get_parallel_sim_link_jobs(JOBS)
 
   # 3. Link Bluesim executable

@@ -14,6 +14,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   install(
     FILES
       ./BluesimExecutable.cmake
+      ./BluesimSystemC.cmake
       ./BluespecLibrary.cmake
       ./BluespecTargets.cmake
       ./BluespecUtils.cmake

@@ -107,6 +107,53 @@ function(bsc_setup_sim_flags BSC_FLAGS)
   set(${BSC_FLAGS} ${_BSC_FLAGS} PARENT_SCOPE)
 endfunction()
 
+# Function: bsc_setup_cxx_systemc_flags
+#   Setup CXX bsc flags for linking with SystemC. See 3.6 Setting the path. To search for SystemC,
+#   user can either set the environment variable `SYSTEMC` or set the CMake variable `SYSTMEC`. If
+#   target SystemC::systemc exists, the include and link directories are added to the
+#   CXX_SYSTEMC_FLAGS.
+#
+# Arguments:
+#   CXX_SYSTEMC_FLAGS - (Inout) List of compilation flags with cxx systemc paths set up.
+function(bsc_setup_cxx_systemc_flags CXX_SYSTEMC_FLAGS)
+  if(NOT TARGET SystemC::systemc)
+    # Use BSC defined env variable
+    find_path(SYSTEMC_INCLUDE NAMES systemc.h
+      HINTS "${SYSTEMC}" ENV SYSTEMC
+      PATH_SUFFIXES include)
+    find_library(SYSTEMC_LIBDIR NAMES systemc
+      HINTS "${SYSTEMC}" ENV SYSTEMC
+      PATH_SUFFIXES lib)
+
+    if(SYSTEMC_INCLUDE AND SYSTEMC_LIBDIR)
+      set(_CXX_SYSTEMC_FLAGS "-Xc++" "-I${SYSTEMC_INCLUDE}" "-Xc++" "-L${SYSTEMC_LIBDIR}")
+      set(${CXX_SYSTEMC_FLAGS} ${_CXX_SYSTEMC_FLAGS} PARENT_SCOPE)
+      return()
+    endif()
+
+    # If env variable is not set, use CMake module
+    find_package(SystemCLanguage CONFIG REQUIRED)
+    if(SystemCLanguage_FOUND)
+      get_target_property(SYSTEMC_INCLUDE SystemC::systemc INTERFACE_INCLUDE_DIRECTORIES)
+      get_target_property(SYSTEMC_LIBDIR SystemC::systemc INTERFACE_LINK_DIRECTORIES)
+      set(_CXX_SYSTEMC_FLAGS "-Xc++" "-I${SYSTEMC_INCLUDE}" "-Xc++" "-L${SYSTEMC_LIBDIR}")
+      set(${CXX_SYSTEMC_FLAGS} ${_CXX_SYSTEMC_FLAGS} PARENT_SCOPE)
+      return()
+    endif()
+
+    message("SystemC not found. This can be fixed by doing either of the following steps:")
+    message("- set SYSTEMC (environment) variable; or")
+    message("- use the CMake module of your SystemC installation (may require CMAKE_PREFIX_PATH)")
+    message(FATAL_ERROR "SystemC not found")
+  else()
+    get_target_property(SYSTEMC_INCLUDE SystemC::systemc INTERFACE_INCLUDE_DIRECTORIES)
+    get_target_property(SYSTEMC_LIBDIR SystemC::systemc INTERFACE_LINK_DIRECTORIES)
+    set(_CXX_SYSTEMC_FLAGS "-Xc++" "-I${SYSTEMC_INCLUDE}" "-Xc++" "-L${SYSTEMC_LIBDIR}")
+    set(${CXX_SYSTEMC_FLAGS} ${_CXX_SYSTEMC_FLAGS} PARENT_SCOPE)
+    return()
+  endif()
+endfunction()
+
 # Function: bsc_setup_verilog_flags
 #   Setup bsc flags for verilog generation. See 3.1 Common compile and linking flags.
 #
@@ -124,27 +171,46 @@ endfunction()
 # Arguments:
 #   BLUESIM_TARGETS - (Output) A list of paths to the Bluesim targets.
 #   TOP_MODULE      - Top module to generate the Bluesim executable.
+#   SIMDIR             - Output directory for Bluesim intermediate files.
 function(bsc_get_bluesim_targets BLUESIM_TARGETS TOP_MODULE)
   cmake_parse_arguments("" ""
                            "SIMDIR"
                            ""
                            ${ARGN})
-  # Compiled files
   set(GENERATED_CXX_SOURCES "${TOP_MODULE}.cxx" "model_${TOP_MODULE}.cxx")
   set(GENERATED_CXX_HEADERS "${TOP_MODULE}.h"   "model_${TOP_MODULE}.h")
   set(GENERATED_CXX_OBJECTS "${TOP_MODULE}.o"   "model_${TOP_MODULE}.o")
-
-  # All bluesim targets
-  if(_SIMDIR)
-    list(TRANSFORM GENERATED_CXX_SOURCES PREPEND ${SIMDIR}/)
-    list(TRANSFORM GENERATED_CXX_HEADERS PREPEND ${SIMDIR}/)
-    list(TRANSFORM GENERATED_CXX_OBJECTS PREPEND ${SIMDIR}/)
-  endif()
-
   set(_BLUESIM_TARGETS ${GENERATED_CXX_SOURCES}
                        ${GENERATED_CXX_HEADERS}
                        ${GENERATED_CXX_OBJECTS})
+  if(_SIMDIR)
+    list(TRANSFORM _BLUESIM_TARGETS PREPEND "${SIMDIR}/")
+  endif()
   set(${BLUESIM_TARGETS} ${_BLUESIM_TARGETS} PARENT_SCOPE)
+endfunction()
+
+# Function: bsc_get_bluesim_sc_targets
+#   Determine all generated Bluesim targets.
+#
+# Arguments:
+#   BLUESIM_SC_TARGETS - (Output) A list of paths to the Bluesim SystemC targets.
+#   TOP_MODULE         - Top module to generate the Bluesim executable.
+#   SIMDIR             - Output directory for Bluesim intermediate files.
+function(bsc_get_bluesim_sc_targets BLUESIM_SC_TARGETS TOP_MODULE)
+  cmake_parse_arguments("" ""
+                           "SIMDIR"
+                           ""
+                           ${ARGN})
+  set(GENERATED_SC_SOURCE "${TOP_MODULE}_systemc.cxx")
+  set(GENERATED_SC_HEADER "${TOP_MODULE}_systemc.h")
+  set(GENERATED_SC_OBJECT "${TOP_MODULE}_systemc.o")
+  set(_BLUESIM_SC_TARGETS ${GENERATED_SC_SOURCE}
+                          ${GENERATED_SC_HEADER}
+                          ${GENERATED_SC_OBJECT})
+  if(_SIMDIR)
+    list(TRANSFORM _BLUESIM_SC_TARGETS PREPEND "${SIMDIR}/")
+  endif()
+  set(${BLUESIM_SC_TARGETS} ${_BLUESIM_SC_TARGETS})
 endfunction()
 
 # Function: bsc_pre_elaboration
