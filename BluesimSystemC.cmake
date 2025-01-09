@@ -86,24 +86,26 @@ function(add_bluesim_systemc_library TARGET TOP_MODULE ROOT_SOURCE)
   bsc_get_bluesim_targets(BLUESIM_TARGETS ${TOP_MODULE} SIMDIR ${SIMDIR})
   bsc_get_bluesim_sc_targets(BLUESIM_SC_TARGETS ${TOP_MODULE} SIMDIR ${SIMDIR})
   bsc_get_parallel_sim_link_jobs(JOBS)
-  bsc_setup_cxx_systemc_flags(CXX_SYSTEMC_FLAGS)
+  bsc_setup_systemc_include_flags(SYSTEMC_INCLUDE_FLAGS)
 
   # 3. Generate SystemC model
   add_custom_command(
     OUTPUT  ${BLUESIM_TARGETS} ${BLUESIM_SC_TARGETS}
     COMMAND ${BSC_COMMAND} "-systemc" "-parallel-sim-link" ${JOBS} "-e" ${TOP_MODULE}
-            ${CXX_SYSTEMC_FLAGS}
+            ${SYSTEMC_INCLUDE_FLAGS}
     DEPENDS ${ELAB_MODULE}
     COMMENT "Generating SystemC model for ${TOP_MODULE}"
     VERBATIM
   )
 
   # 4. Link generated objects into a static library
+  string(REPLACE "${CMAKE_BINARY_DIR}/" "" TARGET_LIB_PATH ${TARGET_LIB})
   add_custom_command(
     OUTPUT  ${TARGET_LIB}
     COMMAND "${CMAKE_AR}" "rcs" ${TARGET_LIB} `echo *.o`
     WORKING_DIRECTORY ${SIMDIR}
     DEPENDS ${BLUESIM_TARGETS} ${BLUESIM_SC_TARGETS}
+    COMMENT "Linking CXX static library ${TARGET_LIB_PATH}"
   )
 
   # Import the compiled Bluesim SystemC library as CXX library

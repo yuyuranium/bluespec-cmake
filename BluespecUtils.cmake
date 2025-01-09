@@ -107,51 +107,52 @@ function(bsc_setup_sim_flags BSC_FLAGS)
   set(${BSC_FLAGS} ${_BSC_FLAGS} PARENT_SCOPE)
 endfunction()
 
-# Function: bsc_setup_cxx_systemc_flags
-#   Setup CXX bsc flags for linking with SystemC. See 3.6 Setting the path. To search for SystemC,
+# Function: bsc_setup_systemc_include_flags
+#   Setup CXX bsc flags for including SystemC. See 3.6 Setting the path. To search for SystemC,
 #   user can either set the environment variable `SYSTEMC` or set the CMake variable `SYSTMEC`. If
 #   target SystemC::systemc exists, the include and link directories are added to the
 #   CXX_SYSTEMC_FLAGS.
 #
 # Arguments:
 #   CXX_SYSTEMC_FLAGS - (Inout) List of compilation flags with cxx systemc paths set up.
-function(bsc_setup_cxx_systemc_flags CXX_SYSTEMC_FLAGS)
-  if(NOT TARGET SystemC::systemc)
-    # Use BSC defined env variable
-    find_path(SYSTEMC_INCLUDE NAMES systemc.h
-      HINTS "${SYSTEMC}" ENV SYSTEMC
-      PATH_SUFFIXES include)
-    find_library(SYSTEMC_LIBDIR NAMES systemc
-      HINTS "${SYSTEMC}" ENV SYSTEMC
-      PATH_SUFFIXES lib)
-
-    if(SYSTEMC_INCLUDE AND SYSTEMC_LIBDIR)
-      set(_CXX_SYSTEMC_FLAGS "-Xc++" "-I${SYSTEMC_INCLUDE}" "-Xc++" "-L${SYSTEMC_LIBDIR}")
-      set(${CXX_SYSTEMC_FLAGS} ${_CXX_SYSTEMC_FLAGS} PARENT_SCOPE)
-      return()
-    endif()
-
-    # If env variable is not set, use CMake module
-    find_package(SystemCLanguage CONFIG REQUIRED)
-    if(SystemCLanguage_FOUND)
-      get_target_property(SYSTEMC_INCLUDE SystemC::systemc INTERFACE_INCLUDE_DIRECTORIES)
-      get_target_property(SYSTEMC_LIBDIR SystemC::systemc INTERFACE_LINK_DIRECTORIES)
-      set(_CXX_SYSTEMC_FLAGS "-Xc++" "-I${SYSTEMC_INCLUDE}" "-Xc++" "-L${SYSTEMC_LIBDIR}")
-      set(${CXX_SYSTEMC_FLAGS} ${_CXX_SYSTEMC_FLAGS} PARENT_SCOPE)
-      return()
-    endif()
-
-    message("SystemC not found. This can be fixed by doing either of the following steps:")
-    message("- set SYSTEMC (environment) variable; or")
-    message("- use the CMake module of your SystemC installation (may require CMAKE_PREFIX_PATH)")
-    message(FATAL_ERROR "SystemC not found")
-  else()
-    get_target_property(SYSTEMC_INCLUDE SystemC::systemc INTERFACE_INCLUDE_DIRECTORIES)
-    get_target_property(SYSTEMC_LIBDIR SystemC::systemc INTERFACE_LINK_DIRECTORIES)
-    set(_CXX_SYSTEMC_FLAGS "-Xc++" "-I${SYSTEMC_INCLUDE}" "-Xc++" "-L${SYSTEMC_LIBDIR}")
+function(bsc_setup_systemc_include_flags CXX_SYSTEMC_FLAGS)
+  # See if SystemC::systemc is an existing target
+  if(TARGET SystemC::systemc)
+    set(_CXX_SYSTEMC_FLAGS
+        "-Xc++"
+        "-I$<TARGET_PROPERTY:SystemC::systemc,INTERFACE_INCLUDE_DIRECTORIES>")
     set(${CXX_SYSTEMC_FLAGS} ${_CXX_SYSTEMC_FLAGS} PARENT_SCOPE)
     return()
   endif()
+
+  # Use BSC defined env variable
+  find_path(SYSTEMC_INCLUDE NAMES systemc.h
+    HINTS "${SYSTEMC}" ENV SYSTEMC
+    PATH_SUFFIXES include)
+  find_library(SYSTEMC_LIBDIR NAMES systemc
+    HINTS "${SYSTEMC}" ENV SYSTEMC
+    PATH_SUFFIXES lib)
+
+  if(SYSTEMC_INCLUDE AND SYSTEMC_LIBDIR)
+    set(_CXX_SYSTEMC_FLAGS "-Xc++" "-I${SYSTEMC_INCLUDE}")
+    set(${CXX_SYSTEMC_FLAGS} ${_CXX_SYSTEMC_FLAGS} PARENT_SCOPE)
+    return()
+  endif()
+
+  # If env variable is not set, use CMake module
+  find_package(SystemCLanguage CONFIG REQUIRED)
+  if(SystemCLanguage_FOUND)
+    set(_CXX_SYSTEMC_FLAGS
+        "-Xc++"
+        "-I$<TARGET_PROPERTY:SystemC::systemc,INTERFACE_INCLUDE_DIRECTORIES>")
+    set(${CXX_SYSTEMC_FLAGS} ${_CXX_SYSTEMC_FLAGS} PARENT_SCOPE)
+    return()
+  endif()
+
+  message("SystemC not found. This can be fixed by doing either of the following steps:")
+  message("- set SYSTEMC (environment) variable; or")
+  message("- use the CMake module of your SystemC installation (may require CMAKE_PREFIX_PATH)")
+  message(FATAL_ERROR "SystemC not found")
 endfunction()
 
 # Function: bsc_setup_verilog_flags
