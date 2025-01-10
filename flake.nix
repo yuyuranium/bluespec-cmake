@@ -17,7 +17,7 @@
       in
       {
         devShells.default = pkgs.mkShell {
-          name = "test";
+          name = "bluespec-cmake-test";
           nativeBuildInputs = with pkgs; [
             cmake
             bluespec
