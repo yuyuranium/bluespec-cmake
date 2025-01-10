@@ -19,7 +19,7 @@ include(BluespecUtils)
 #   LINK_LIBS   - List of targets to link against.
 #
 # Generates:
-#   A target named Bluesim.<SIM_EXE>.
+#   A target named <TARGET> and a Bluesim SystemC target Bluesim.SystemC.lib<TARGET>
 function(add_bluesim_systemc_library TARGET TOP_MODULE ROOT_SOURCE)
   cmake_parse_arguments(BSIM_SC ""
                                 ""
@@ -29,7 +29,7 @@ function(add_bluesim_systemc_library TARGET TOP_MODULE ROOT_SOURCE)
   get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
 
   # Create Bluesim SystemC target
-  set(BSIM_SC_TARGET "${TARGET}.SystemC.${TOP_MODULE}")
+  set(BSIM_SC_TARGET "Bluesim.SystemC.lib${TARGET}")
 
   # Generate simulation sources under TARGET's binary directory
   set(SIMDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${BSIM_SC_TARGET}.dir)
@@ -105,7 +105,7 @@ function(add_bluesim_systemc_library TARGET TOP_MODULE ROOT_SOURCE)
     COMMAND "${CMAKE_AR}" "rcs" ${TARGET_LIB} `echo *.o`
     WORKING_DIRECTORY ${SIMDIR}
     DEPENDS ${BLUESIM_TARGETS} ${BLUESIM_SC_TARGETS}
-    COMMENT "Linking CXX static library ${TARGET_LIB_PATH}"
+    COMMENT "Linking Bluesim SystemC library ${TARGET_LIB_PATH}"
   )
 
   # Import the compiled Bluesim SystemC library as CXX library
