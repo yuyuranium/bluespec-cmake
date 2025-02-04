@@ -14,19 +14,26 @@ include(BluespecUtils)
 #   TARGET      - The target name.
 #   TOP_MODULE  - Top module to generate the Bluesim executable.
 #   ROOT_SOURCE - Source to the root compilation unit.
+#   C_LIBS      - Foreign C source/object files to link against.
 #   BSC_FLAGS   - Multiple flags to be appended during compilation.
 #   SRC_DIRS    - List of directories for *.bsv and *.bo.
-#   LINK_LIBS   - List of targets to link against.
+#   LINK_LIBS   - List of Bluespec library targets to link against.
+#   LINK_C_LIBS - List of foreign C library targets to link against.
+#   C_FLAGS     - Arguments passed to the C compiler.
+#   CXX_FLAGS   - Arguments passed to the C++ compiler.
+#   CPP_FLAGS   - Arguments passed to the C preprocessor.
+#   LD_FLAGS    - Arguments passed to the C/C++ linker.
 #
 # Generates:
 #   A target named <TARGET> and a Bluesim SystemC target Bluesim.SystemC.lib<TARGET>
 function(add_bluesim_systemc_library TARGET TOP_MODULE ROOT_SOURCE)
   cmake_parse_arguments(BSIM_SC ""
                                 ""
-                                "BSC_FLAGS;SRC_DIRS;LINK_LIBS"
+                                "BSC_FLAGS;SRC_DIRS;LINK_LIBS;LINK_C_LIBS;C_FLAGS;CXX_FLAGS;CPP_FLAGS;LD_FLAGS"
                                 ${ARGN})
   # Use absolute path
   get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
+  list(TRANSFORM BSIM_SC_C_LIBS PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
 
   # Create Bluesim SystemC target
   set(BSIM_SC_TARGET "Bluesim.SystemC.lib${TARGET}")
@@ -86,14 +93,21 @@ function(add_bluesim_systemc_library TARGET TOP_MODULE ROOT_SOURCE)
   bsc_get_bluesim_targets(BLUESIM_TARGETS ${TOP_MODULE} SIMDIR ${SIMDIR})
   bsc_get_bluesim_sc_targets(BLUESIM_SC_TARGETS ${TOP_MODULE} SIMDIR ${SIMDIR})
   bsc_get_parallel_sim_link_jobs(JOBS)
+  bsc_get_link_c_lib_files(LINK_C_LIB_FILES ${BSIM_SC_LINK_C_LIBS})
   bsc_setup_systemc_include_flags(SYSTEMC_INCLUDE_FLAGS)
+  bsc_setup_c_cxx_flags(C_CXX_FLAGS
+    C_FLAGS ${BSIM_SC_C_FLAGS}
+    CXX_FLAGS ${BSIM_SC_CXX_FLAGS}
+    CPP_FLAGS ${BSIM_SC_CPP_FLAGS}
+    LD_FLAGS ${BSIM_SC_LD_FLAGS}
+  )
 
   # 3. Generate SystemC model
   add_custom_command(
     OUTPUT  ${BLUESIM_TARGETS} ${BLUESIM_SC_TARGETS}
-    COMMAND ${BSC_COMMAND} "-systemc" "-parallel-sim-link" ${JOBS} "-e" ${TOP_MODULE}
-            ${SYSTEMC_INCLUDE_FLAGS}
-    DEPENDS ${ELAB_MODULE}
+    COMMAND ${BSC_COMMAND} ${C_CXX_FLAGS} "-systemc" "-parallel-sim-link" ${JOBS}
+            "-e" ${TOP_MODULE} ${SYSTEMC_INCLUDE_FLAGS} ${LINK_C_LIB_FILES}
+    DEPENDS ${ELAB_MODULE} ${BSIM_SC_LINK_C_LIBS}
     COMMENT "Generating SystemC model for ${TOP_MODULE}"
     VERBATIM
   )

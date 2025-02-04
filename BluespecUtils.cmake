@@ -83,6 +83,20 @@ function(bsc_setup_path_flags BSC_FLAGS)
   set(${BSC_FLAGS} ${_BSC_FLAGS} PARENT_SCOPE)
 endfunction()
 
+# Function: bsc_get_link_c_lib_files
+#   Transform a list of targets to the TARGET_FILE generator expressions.
+#
+# Argument:
+#   LINK_C_LIB_FILES - (Output) List of paths to all C libraries
+#   LINK_C_LIB       - List of C library targets
+function(bsc_get_link_c_lib_files LINK_C_LIB_FILES LINK_C_LIB)
+  set(_LINK_C_LIB_FILES)
+  foreach(C_LIB ${LINK_C_LIB})
+    list(APPEND _LINK_C_LIB_FILES $<TARGET_FILE:${C_LIB}>)
+  endforeach()
+  set(${LINK_C_LIB_FILES} ${_LINK_C_LIB_FILES} PARENT_SCOPE)
+endfunction()
+
 # Function: bsc_get_parallel_sim_link_jobs
 #   Get the number of jobs for parallel sim link.
 #
@@ -105,6 +119,28 @@ function(bsc_setup_sim_flags BSC_FLAGS)
   set(_BSC_FLAGS ${${BSC_FLAGS}})
   list(PREPEND _BSC_FLAGS "-sim" "-elab")
   set(${BSC_FLAGS} ${_BSC_FLAGS} PARENT_SCOPE)
+endfunction()
+
+# Function: bsc_setup_sim_flags
+#   Setup bsc C/C++ flags. See 3.14 C/C++ flags.
+#
+# Arguments:
+#   C_CXX_FLAGS - (Out) List of compilation flags with search paths set up.
+#   C_FLAGS     - Arguments passed to the C compiler.
+#   CXX_FLAGS   - Arguments passed to the C++ compiler.
+#   CPP_FLAGS   - Arguments passed to the C preprocessor.
+#   LD_FLAGS    - Arguments passed to the C/C++ linker.
+function(bsc_setup_c_cxx_flags C_CXX_FLAGS)
+  cmake_parse_arguments("" ""
+                           ""
+                           "C_FLAGS;CXX_FLAGS;CPP_FLAGS;LD_FLAGS"
+                           ${ARGN})
+  list(TRANSFORM _C_FLAGS PREPEND "-Xc;")
+  list(TRANSFORM _CXX_FLAGS PREPEND "-Xc++;")
+  list(TRANSFORM _CPP_FLAGS PREPEND "-Xcpp;")
+  list(TRANSFORM _LD_FLAGS PREPEND "-Xl;")
+  set(_C_CXX_FLAGS ${_C_FLAGS} ${_CXX_FLAGS} ${_CPP_FLAGS} ${_LD_FLAGS})
+  set(${C_CXX_FLAGS} ${_C_CXX_FLAGS} PARENT_SCOPE)
 endfunction()
 
 # Function: bsc_setup_systemc_include_flags
