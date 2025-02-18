@@ -89,7 +89,7 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
 
   bsc_get_bluesim_targets(BLUESIM_TARGETS ${TOP_MODULE} SIMDIR ${SIMDIR})
   bsc_get_parallel_sim_link_jobs(JOBS)
-  bsc_get_link_c_lib_files(LINK_C_LIB_FILES ${BSIM_LINK_C_LIBS})
+  bsc_get_link_c_lib_files(LINK_C_LIB_FILES LINK_C_LIBS ${BSIM_LINK_C_LIBS})
   bsc_setup_c_cxx_flags(C_CXX_FLAGS
     C_FLAGS ${BSIM_C_FLAGS}
     CXX_FLAGS ${BSIM_CXX_FLAGS}

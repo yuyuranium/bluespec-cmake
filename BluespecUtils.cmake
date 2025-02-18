@@ -89,9 +89,13 @@ endfunction()
 # Argument:
 #   LINK_C_LIB_FILES - (Output) List of paths to all C libraries
 #   LINK_C_LIB       - List of C library targets
-function(bsc_get_link_c_lib_files LINK_C_LIB_FILES LINK_C_LIB)
+function(bsc_get_link_c_lib_files LINK_C_LIB_FILES)
+  cmake_parse_arguments("" ""
+                           ""
+                           "LINK_C_LIBS"
+                           ${ARGN})
   set(_LINK_C_LIB_FILES)
-  foreach(C_LIB ${LINK_C_LIB})
+  foreach(C_LIB ${_LINK_C_LIBS})
     list(APPEND _LINK_C_LIB_FILES $<TARGET_FILE:${C_LIB}>)
   endforeach()
   set(${LINK_C_LIB_FILES} ${_LINK_C_LIB_FILES} PARENT_SCOPE)

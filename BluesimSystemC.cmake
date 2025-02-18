@@ -93,7 +93,7 @@ function(add_bluesim_systemc_library TARGET TOP_MODULE ROOT_SOURCE)
   bsc_get_bluesim_targets(BLUESIM_TARGETS ${TOP_MODULE} SIMDIR ${SIMDIR})
   bsc_get_bluesim_sc_targets(BLUESIM_SC_TARGETS ${TOP_MODULE} SIMDIR ${SIMDIR})
   bsc_get_parallel_sim_link_jobs(JOBS)
-  bsc_get_link_c_lib_files(LINK_C_LIB_FILES ${BSIM_SC_LINK_C_LIBS})
+  bsc_get_link_c_lib_files(LINK_C_LIB_FILES LINK_C_LIBS ${BSIM_SC_LINK_C_LIBS})
   bsc_setup_systemc_include_flags(SYSTEMC_INCLUDE_FLAGS)
   bsc_setup_c_cxx_flags(C_CXX_FLAGS
     C_FLAGS ${BSIM_SC_C_FLAGS}
