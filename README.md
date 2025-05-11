@@ -24,6 +24,20 @@ add_bsc_library("/path/to/Package.bsv")
 add_bluesim_executable(top_sim mkTop "/path/to/Top.bsv")
 ```
 
+### Generating VCD waveform file by running Bluesim executable
+
+**Definition:** [`generate_bluesim_waveform`](./BluesimWaveform.cmake)
+
+**Example:**
+```cmake
+add_bluesim_executable(top_sim mkTop "/path/to/Top.bsv")
+# generates top_sim.vcd
+generate_bluesim_waveform(top_sim
+  SIM_FLAGS
+    -m 100 # run simulation for 100 cycles
+)
+```
+
 ### Generating Verilog from Bluespec sources
 
 **Definition:** [`generate_verilog`](./BluespecVerilogGeneration.cmake)
