@@ -80,7 +80,7 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
   # Elaborate Bluesim top module
   add_custom_command(
     OUTPUT  ${ELAB_MODULE}
-    COMMAND ${BSC_COMMAND} "-g" ${TOP_MODULE} ${BSIM_BSC_FLAGS} ${ROOT_SOURCE}
+    COMMAND ${BSC_COMMAND} "-g" ${TOP_MODULE} ${ROOT_SOURCE}
             && touch ${ELAB_MODULE}
     DEPENDS ${BLUE_OBJECTS}
     COMMENT "Elaborating Bluespec module ${ELAB_MODULE_PATH}"
