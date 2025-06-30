@@ -8,6 +8,10 @@ set(_BLUESPEC_UTILS)
 include(FindBluespecToolchain)
 include(ProcessorCount)
 
+# Variable: _BSC_BDIR
+#   Internal list of BDIR's of all bluespec targets.
+set(_BSC_BDIR CACHE INTERNAL "BSC_BDIR")
+
 # Function: bsc_package_name
 #   Compute the package name of given bsv source. See 2.1 Components of a BSV Design.
 #   All BSV code is assumed to be inside a package. Furthermore BSC and other tools assume that
@@ -23,6 +27,16 @@ function(bsc_package_name PKG_NAME SOURCE)
   if(${_EXT} STREQUAL ".bsv")
     set(${PKG_NAME} ${_PKG_NAME} PARENT_SCOPE)
   endif()
+endfunction()
+
+# Function: bsc_reconfig_on_change
+#   Reconfigure CMake when the given file is changed. This is required because the package import
+#   can affect what the targets depend and how they are built.
+#
+# Arguments:
+#   ARGV - All files to be depended on.
+function(bsc_reconfig_on_change)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ARGV})
 endfunction()
 
 # Function: bsc_setup_path_flags
@@ -46,6 +60,9 @@ function(bsc_setup_path_flags BSC_FLAGS)
   if(_BDIR)
     list(APPEND _BSC_FLAGS "-bdir" ${_BDIR})
   endif()
+
+  # Append to the internal BDIR list.
+  set(_BSC_BDIR ${_BSC_BDIR} ${_BDIR} CACHE INTERNAL "BSC_BDIR")
 
   if(_SIMDIR)
     list(APPEND _BSC_FLAGS "-simdir" ${_SIMDIR})
@@ -311,6 +328,8 @@ function(bsc_pre_elaboration BLUESPEC_OBJECTS ROOT_SOURCE)
     separate_arguments(DEPS)             # convert to list
 
     list(GET DEPS 0 SRC) # first dependency is the source file
+
+    bsc_reconfig_on_change(${SRC})
 
     # Command to build the target
     add_custom_command(
