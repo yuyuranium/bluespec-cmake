@@ -15,7 +15,9 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     FILES
       ./BluesimExecutable.cmake
       ./BluesimSystemC.cmake
+      ./BluesimWaveform.cmake
       ./BluespecLibrary.cmake
+      ./BluespecPaths.cmake
       ./BluespecTargets.cmake
       ./BluespecUtils.cmake
       ./BluespecVerilogGeneration.cmake
