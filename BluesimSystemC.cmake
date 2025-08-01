@@ -123,7 +123,7 @@ function(add_bluesim_systemc_library TARGET TOP_MODULE ROOT_SOURCE)
   )
 
   # Import the compiled Bluesim SystemC library as CXX library
-  add_library(${TARGET} INTERFACE IMPORTED)
+  add_library(${TARGET} INTERFACE IMPORTED GLOBAL)
   add_dependencies(${TARGET} ${BSIM_SC_TARGET})
   set_target_properties(${TARGET}
     PROPERTIES
