@@ -51,7 +51,7 @@ if(NOT TARGET BSC::bskernel)
 
   if(BLUESIM_BSKERNEL)
     message(STATUS "Found bskernel: ${BLUESIM_BSKERNEL}")
-    add_library(BSC::bskernel INTERFACE IMPORTED)
+    add_library(BSC::bskernel INTERFACE IMPORTED GLOBAL)
     set_target_properties(BSC::bskernel
       PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${_BSC_LIB_PATH}"
@@ -77,7 +77,7 @@ if(NOT TARGET BSC::bsprim)
 
   if(BLUESIM_BSPRIME)
     message(STATUS "Found bsprim: ${BLUESIM_BSPRIME}")
-    add_library(BSC::bsprim INTERFACE IMPORTED)
+    add_library(BSC::bsprim INTERFACE IMPORTED GLOBAL)
     set_target_properties(BSC::bsprim
       PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${_BSC_LIB_PATH}"
