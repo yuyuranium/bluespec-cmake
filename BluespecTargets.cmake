@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-if(__add_bluespec)
-  return()
-endif()
-set(__add_bluespec ON)
+include_guard(GLOBAL)
 
 include(BluespecUtils)
 

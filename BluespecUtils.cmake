@@ -1,12 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 
-if(_BLUESPEC_UTILS)
-  return()
-endif()
-set(_BLUESPEC_UTILS)
+include_guard(GLOBAL)
 
 include(FindBluespecToolchain)
-include(ProcessorCount)
 
 # Variable: _BSC_BDIR
 #   Internal list of BDIR's of all bluespec targets.
@@ -17,9 +13,12 @@ set(_BSC_BDIR CACHE INTERNAL "BSC_BDIR")
 #   All BSV code is assumed to be inside a package. Furthermore BSC and other tools assume that
 #   there is one package per file, and they use the package name to derive the file name.
 #
+# Usage:
+#   bsc_package_name(<PKG_NAME_VAR> <SOURCE>)
+#
 # Arguments:
-#   PKG_NAME - (Output) Package name of the bsv source.
-#   SOURCE   - Source file (*.bsv).
+#   PKG_NAME_VAR - (Output) Variable to store the package name.
+#   SOURCE       - Source file (*.bsv).
 function(bsc_package_name PKG_NAME SOURCE)
   get_filename_component(_PKG_NAME ${SOURCE} NAME_WE)
   get_filename_component(_EXT ${SOURCE} EXT)
@@ -29,21 +28,18 @@ function(bsc_package_name PKG_NAME SOURCE)
   endif()
 endfunction()
 
-# Function: bsc_reconfig_on_change
-#   Reconfigure CMake when the given file is changed. This is required because the package import
-#   can affect what the targets depend and how they are built.
-#
-# Arguments:
-#   ARGV - All files to be depended on.
-function(bsc_reconfig_on_change)
-  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ARGV})
-endfunction()
-
 # Function: bsc_setup_path_flags
 #   Setup all search paths and modified the bsc flags. See 3.6 Setting the path.
 #
+# Usage:
+#   bsc_setup_path_flags(<BSC_FLAGS_VAR>
+#                        [BDIR <dir>] [SIMDIR <dir>] [VDIR <dir>] [INFO_DIR <dir>]
+#                        [SRC_DIRS <dirs...>] [LINK_LIBS <targets...>])
+#
 # Arguments:
-#   BSC_FLAGS - (Inout) List of compilation flags with search paths set up.
+#   BSC_FLAGS_VAR - (Inout) Variable containing list of compilation flags.
+#
+# Options:
 #   BDIR      - Output directory for .bo and .ba files (-bdir).
 #   SIMDIR    - Output directory for Bluesim intermediate files (-simdir).
 #   VDIR      - Output directory for .v files (-vdir).
@@ -103,9 +99,14 @@ endfunction()
 # Function: bsc_get_link_c_lib_files
 #   Transform a list of targets to the TARGET_FILE generator expressions.
 #
-# Argument:
-#   LINK_C_LIB_FILES - (Output) List of paths to all C libraries
-#   LINK_C_LIB       - List of C library targets
+# Usage:
+#   bsc_get_link_c_lib_files(<LINK_C_LIB_FILES_VAR> [LINK_C_LIBS <targets...>])
+#
+# Arguments:
+#   LINK_C_LIB_FILES_VAR - (Output) Variable to store list of paths to all C libraries.
+#
+# Options:
+#   LINK_C_LIBS          - List of C library targets.
 function(bsc_get_link_c_lib_files LINK_C_LIB_FILES)
   cmake_parse_arguments("" ""
                            ""
@@ -121,10 +122,13 @@ endfunction()
 # Function: bsc_get_parallel_sim_link_jobs
 #   Get the number of jobs for parallel sim link.
 #
-# Argument:
-#   JOBS - (Output) Number of jobs for parallel sim link.
+# Usage:
+#   bsc_get_parallel_sim_link_jobs(<JOBS_VAR>)
+#
+# Arguments:
+#   JOBS_VAR - (Output) Variable to store the number of jobs.
 function(bsc_get_parallel_sim_link_jobs JOBS)
-  ProcessorCount(_JOBS)
+  cmake_host_system_information(RESULT _JOBS QUERY NUMBER_OF_LOGICAL_CORES)
   if(NOT _JOBS)
     set(_JOBS 4) # Use 4 if we cannot get number of processor count
   endif()
@@ -134,19 +138,29 @@ endfunction()
 # Function: bsc_setup_sim_flags
 #   Setup bsc flags for Bluesim. See 3.1 Common compile and linking flags.
 #
+# Usage:
+#   bsc_setup_sim_flags(<BSC_FLAGS_VAR>)
+#
 # Arguments:
-#   BSC_FLAGS - (Inout) List of compilation flags with search paths set up.
+#   BSC_FLAGS_VAR - (Inout) Variable containing list of compilation flags.
 function(bsc_setup_sim_flags BSC_FLAGS)
   set(_BSC_FLAGS ${${BSC_FLAGS}})
   list(PREPEND _BSC_FLAGS "-sim" "-elab")
   set(${BSC_FLAGS} ${_BSC_FLAGS} PARENT_SCOPE)
 endfunction()
 
-# Function: bsc_setup_sim_flags
+# Function: bsc_setup_c_cxx_flags
 #   Setup bsc C/C++ flags. See 3.14 C/C++ flags.
 #
+# Usage:
+#   bsc_setup_c_cxx_flags(<C_CXX_FLAGS_VAR>
+#                         [C_FLAGS <flags...>] [CXX_FLAGS <flags...>]
+#                         [CPP_FLAGS <flags...>] [LD_FLAGS <flags...>])
+#
 # Arguments:
-#   C_CXX_FLAGS - (Out) List of compilation flags with search paths set up.
+#   C_CXX_FLAGS_VAR - (Out) Variable to store the list of flags.
+#
+# Options:
 #   C_FLAGS     - Arguments passed to the C compiler.
 #   CXX_FLAGS   - Arguments passed to the C++ compiler.
 #   CPP_FLAGS   - Arguments passed to the C preprocessor.
@@ -170,8 +184,11 @@ endfunction()
 #   target SystemC::systemc exists, the include and link directories are added to the
 #   CXX_SYSTEMC_FLAGS.
 #
+# Usage:
+#   bsc_setup_systemc_include_flags(<CXX_SYSTEMC_FLAGS_VAR>)
+#
 # Arguments:
-#   CXX_SYSTEMC_FLAGS - (Inout) List of compilation flags with cxx systemc paths set up.
+#   CXX_SYSTEMC_FLAGS_VAR - (Inout) Variable containing list of compilation flags.
 function(bsc_setup_systemc_include_flags CXX_SYSTEMC_FLAGS)
   # See if SystemC::systemc is an existing target
   if(TARGET SystemC::systemc)
@@ -215,8 +232,11 @@ endfunction()
 # Function: bsc_setup_verilog_flags
 #   Setup bsc flags for verilog generation. See 3.1 Common compile and linking flags.
 #
+# Usage:
+#   bsc_setup_verilog_flags(<BSC_FLAGS_VAR>)
+#
 # Arguments:
-#   BSC_FLAGS - (Inout) List of compilation flags with search paths set up.
+#   BSC_FLAGS_VAR - (Inout) Variable containing list of compilation flags.
 function(bsc_setup_verilog_flags BSC_FLAGS)
   set(_BSC_FLAGS ${${BSC_FLAGS}})
   list(PREPEND _BSC_FLAGS "-verilog" "-elab")
@@ -226,10 +246,15 @@ endfunction()
 # Function: bsc_get_bluesim_targets
 #   Determine all generated Bluesim targets.
 #
+# Usage:
+#   bsc_get_bluesim_targets(<BLUESIM_TARGETS_VAR> <TOP_MODULE> [SIMDIR <dir>])
+#
 # Arguments:
-#   BLUESIM_TARGETS - (Output) A list of paths to the Bluesim targets.
-#   TOP_MODULE      - Top module to generate the Bluesim executable.
-#   SIMDIR             - Output directory for Bluesim intermediate files.
+#   BLUESIM_TARGETS_VAR - (Output) Variable to store list of paths to the Bluesim targets.
+#   TOP_MODULE          - Top module to generate the Bluesim executable.
+#
+# Options:
+#   SIMDIR              - Output directory for Bluesim intermediate files.
 function(bsc_get_bluesim_targets BLUESIM_TARGETS TOP_MODULE)
   cmake_parse_arguments("" ""
                            "SIMDIR"
@@ -242,7 +267,7 @@ function(bsc_get_bluesim_targets BLUESIM_TARGETS TOP_MODULE)
                        ${GENERATED_CXX_HEADERS}
                        ${GENERATED_CXX_OBJECTS})
   if(_SIMDIR)
-    list(TRANSFORM _BLUESIM_TARGETS PREPEND "${SIMDIR}/")
+    list(TRANSFORM _BLUESIM_TARGETS PREPEND "${_SIMDIR}/")
   endif()
   set(${BLUESIM_TARGETS} ${_BLUESIM_TARGETS} PARENT_SCOPE)
 endfunction()
@@ -250,10 +275,15 @@ endfunction()
 # Function: bsc_get_bluesim_sc_targets
 #   Determine all generated Bluesim targets.
 #
+# Usage:
+#   bsc_get_bluesim_sc_targets(<BLUESIM_SC_TARGETS_VAR> <TOP_MODULE> [SIMDIR <dir>])
+#
 # Arguments:
-#   BLUESIM_SC_TARGETS - (Output) A list of paths to the Bluesim SystemC targets.
-#   TOP_MODULE         - Top module to generate the Bluesim executable.
-#   SIMDIR             - Output directory for Bluesim intermediate files.
+#   BLUESIM_SC_TARGETS_VAR - (Output) Variable to store list of paths to the Bluesim SystemC targets.
+#   TOP_MODULE             - Top module to generate the Bluesim executable.
+#
+# Options:
+#   SIMDIR                 - Output directory for Bluesim intermediate files.
 function(bsc_get_bluesim_sc_targets BLUESIM_SC_TARGETS TOP_MODULE)
   cmake_parse_arguments("" ""
                            "SIMDIR"
@@ -275,71 +305,109 @@ endfunction()
 #   Helper function to compile a root source file recursively to Bluespec
 #   objects (*.bo).
 #
+# Usage:
+#   bsc_pre_elaboration(<BLUESPEC_OBJECTS_VAR> <HASH> [source_files...]
+#                       [BSC_FLAGS <flags...>])
+#
 # Arguments:
-#   BLUESPEC_OBJECTS - (Output) A list of Bluespec object files (*.bo).
-#   ROOT_SOURCE      - Source to the root compilation unit.
-#   BSC_FLAGS        - Multiple flags to be appended during compilation.
-function(bsc_pre_elaboration BLUESPEC_OBJECTS ROOT_SOURCE)
-  cmake_parse_arguments("" ""
-                           ""
-                           "BSC_FLAGS"
-                           ${ARGN})
+#   BLUESPEC_OBJECTS_VAR - (Output) Variable to store list of Bluespec object files (*.bo).
+#   HASH                 - Unique hash for the compilation unit.
+#   source_files         - Source files to process.
+#
+# Options:
+#   BSC_FLAGS            - Multiple flags to be appended during compilation.
+function(bsc_pre_elaboration BLUESPEC_OBJECTS HASH)
+  set(_options)
+  set(_one_args)
+  set(_multi_args   BSC_FLAGS)
+  cmake_parse_arguments(ARG "${_options}" "${_one_args}" "${_multi_args}" ${ARGN})
 
-  # Setup BSC command
-  set(BSC_COMMAND ${BSC_BIN} ${_BSC_FLAGS})
-
-  # Setup Bluetcl options
-  set(DEP_CHECK ${BLUETCL_BIN} "-exec" "makedepend" ${_BSC_FLAGS}
-                ${ROOT_SOURCE})
-
-  # Bluespec objects
-  set(_BLUESPEC_OBJECTS "")
-
-  message(STATUS "Checking dependencies for ${ROOT_SOURCE}")
-  execute_process(
-    COMMAND         ${DEP_CHECK}
-    RESULT_VARIABLE DEP_CHECK_RESULT
-    ERROR_VARIABLE  DEP_ERROR_VARIABLE
-    OUTPUT_VARIABLE DEP_CHECK_OUTPUT)
-
-  if(NOT ${DEP_CHECK_RESULT} EQUAL "0")
-    message(STATUS ${DEP_ERROR_VARIABLE})
-    message(FATAL_ERROR "Checking dependencies for ${ROOT_SOURCE} - failed")
+  set(_sources ${ARG_UNPARSED_ARGUMENTS})
+  if(NOT _sources)
+    message(FATAL_ERROR "bsc_pre_elaboration: No source files provided.")
   endif()
 
-  # Split the output string to list
-  string(REPLACE "\n" ";" DEP_LIST ${DEP_CHECK_OUTPUT})
-  foreach(LINE ${DEP_LIST})
-    # Line starts with a '#' is a comment, skip it
-    string(FIND ${LINE} "#" IS_NOT_DEP)
-    if(${IS_NOT_DEP} EQUAL "0")
+  # Use the first source as the identifier for the cache key (or use the HASH itself)
+  list(GET _sources 0 _first_src)
+  set(_cache_list_var "BSC_DEP_LIST_${HASH}")
+
+  # 1. Perform dependency check (only execute_process when Hash changes)
+  if(NOT DEFINED ${_cache_list_var})
+    message(STATUS "Checking dependencies for ${_first_src} (${HASH})")
+    
+    # Note: makedepend still needs to scan all _sources to get the complete dependency graph
+    set(_dep_check ${BLUETCL_BIN} "-exec" "makedepend" ${ARG_BSC_FLAGS} ${_first_src})
+
+    execute_process(
+      COMMAND           ${_dep_check}
+      RESULT_VARIABLE   _res
+      ERROR_VARIABLE    _err
+      OUTPUT_VARIABLE   _out
+    )
+
+    if(NOT _res EQUAL "0")
+      message(STATUS "${_err}")
+      message(FATAL_ERROR "Checking dependencies for ${_first_src} (${HASH}) - failed")
+    endif()
+
+    string(REPLACE "\n" ";" _dep_list "${_out}")
+    set(${_cache_list_var} "${_dep_list}" CACHE INTERNAL "Cached DEP_LIST")
+  endif()
+
+  # 2. Build in-memory KV-store (for fast lookup)
+  # We use _src as the Key, storing the corresponding _target and _deps
+  set(_current_dep_list "${${_cache_list_var}}")
+  set(_internal_kv_prefix "KV_${HASH}")
+
+  foreach(_line ${_current_dep_list})
+    string(FIND "${_line}" "#" _is_comment)
+    if(_is_comment EQUAL "0" OR "${_line}" STREQUAL "")
       continue()
     endif()
 
-    # Split make-style dependency expression into target and its dependencies
-    string(REPLACE ":" ";" TARGET_DEPS ${LINE})
-    list(GET TARGET_DEPS 0 TARGET) # before the colon is the target
-    list(GET TARGET_DEPS 1 DEPS)   # after the colon is its dependencies
+    string(REPLACE ":" ";" _target_deps "${_line}")
+    list(GET _target_deps 0 _target)
+    list(GET _target_deps 1 _deps_raw)
 
-    list(APPEND _BLUESPEC_OBJECTS ${TARGET}) # add bluespec object target
-    string(REPLACE "${CMAKE_BINARY_DIR}/" "" TARGET_PATH ${TARGET})
+    # Extract the first dependency item as the source code path (_src)
+    string(REPLACE "\t" "" _deps_list "${_deps_raw}")
+    separate_arguments(_deps_list)
+    list(GET _deps_list 0 _src)
 
-    string(REPLACE "\t" "" DEPS ${DEPS}) # remove tabs
-    separate_arguments(DEPS)             # convert to list
-
-    list(GET DEPS 0 SRC) # first dependency is the source file
-
-    bsc_reconfig_on_change(${SRC})
-
-    # Command to build the target
-    add_custom_command(
-      OUTPUT ${TARGET}
-      COMMAND ${BSC_COMMAND} ${SRC}
-      COMMENT "Building Bluespec object ${TARGET_PATH}"
-      DEPENDS ${DEPS})
+    # Store data into KV-store
+    # Key: absolute path of _src
+    get_filename_component(_abs_src "${_src}" ABSOLUTE)
+    set("${_internal_kv_prefix}_TGT_${_abs_src}" "${_target}")
+    set("${_internal_kv_prefix}_DEP_${_abs_src}" "${_deps_list}")
   endforeach()
 
-  # Return the bluespec objects
-  set(${BLUESPEC_OBJECTS} ${_BLUESPEC_OBJECTS} PARENT_SCOPE)
-  message(STATUS "Checking dependencies for ${ROOT_SOURCE} - done")
+  # 3. Iterate through SOURCES provided by the developer and match with KV-store
+  set(_local_objs "")
+  set(_bsc_cmd ${BSC_BIN} ${ARG_BSC_FLAGS})
+
+  foreach(_s ${_sources})
+    get_filename_component(_abs_s "${_s}" ABSOLUTE)
+    
+    # Query KV-store
+    set(_target "${${_internal_kv_prefix}_TGT_${_abs_s}}")
+    set(_deps   "${${_internal_kv_prefix}_DEP_${_abs_s}}")
+
+    if(_target)
+      list(APPEND _local_objs "${_target}")
+      string(REPLACE "${CMAKE_BINARY_DIR}/" "" _target_path "${_target}")
+
+      add_custom_command(
+        OUTPUT  "${_target}"
+        COMMAND ${_bsc_cmd} "${_abs_s}"
+        COMMENT "Building Bluespec object ${_target_path}"
+        DEPENDS ${_deps}
+        VERBATIM
+      )
+    else()
+      message(WARNING "Source file ${_s} was specified but no dependency rule was found by makedepend.")
+    endif()
+  endforeach()
+
+  # Return the list of generated objects
+  set(${BLUESPEC_OBJECTS} "${_local_objs}" PARENT_SCOPE)
 endfunction()

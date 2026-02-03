@@ -1,82 +1,106 @@
 cmake_minimum_required(VERSION 3.22)
 
-if(_BLUESPEC_VERILOG_GENERATION)
-  return()
-endif()
-set(_BLUESPEC_VERILOG_GENERATION)
+include_guard(GLOBAL)
 
 include(BluespecUtils)
 
 # Function: generate_verilog
 #   Generate Verilog source for a Bluespec module.
 #
+# Usage:
+#   generate_verilog(<TOP_MODULE> <ROOT_SOURCE> [source_files...]
+#                    [BSC_FLAGS <flags...>] [LINK_LIBS <libs...>])
+#
 # Arguments:
-#   TOP_MODULE  - Top module to generate the Bluesim executable.
-#   ROOT_SOURCE - Source to the root compilation unit.
-#   BSC_FLAGS   - Multiple flags to be appended during compilation.
-#   SRC_DIRS    - List of directories for *.bsv and *.bo.
-#   LINK_LIBS   - List of targets to link against.
+#   TOP_MODULE   - Top module to generate the Bluesim executable.
+#   ROOT_SOURCE  - Source to the root compilation unit.
+#   source_files - Additional source files/directories to include in search path.
+#
+# Options:
+#   BSC_FLAGS - Multiple flags to be appended during compilation.
+#   LINK_LIBS - List of targets to link against.
 #
 # Generates:
 #   A target named Verilog.<TOP_MODULE>.
 function(generate_verilog TOP_MODULE ROOT_SOURCE)
-  cmake_parse_arguments(VLOG ""
-                             ""
-                             "BSC_FLAGS;SRC_DIRS;LINK_LIBS"
-                             ${ARGN})
-  # Use absolute path
-  get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
+  set(_options)
+  set(_one_args)
+  set(_multi_args   BSC_FLAGS   LINK_LIBS)
 
-  # Create Verilog target
-  set(TARGET "Verilog.${TOP_MODULE}")
+  cmake_parse_arguments(ARG "${_options}" "${_one_args}" "${_multi_args}" ${ARGN})
 
-  # Prefer CMAKE_LIBRARY_OUTPUT_DIRECTORY
+  # 1. Handle absolute paths and extract directories
+  get_filename_component(_abs_root_source "${ROOT_SOURCE}" ABSOLUTE)
+  
+  set(_all_sources "${_abs_root_source}")
+  set(_src_dirs "")
+
+  # Extract directories from the remaining sources
+  foreach(_src ${ARG_UNPARSED_ARGUMENTS})
+    get_filename_component(_abs_path "${_src}" ABSOLUTE)
+    list(APPEND _all_sources "${_abs_path}")
+    get_filename_component(_dir_path "${_abs_path}" DIRECTORY)
+    list(APPEND _src_dirs "${_dir_path}")
+  endforeach()
+
+  list(REMOVE_DUPLICATES _all_sources)
+  list(REMOVE_DUPLICATES _src_dirs)
+
+  # 2. Set Target and output path (VDIR)
+  set(_target "Verilog.${TOP_MODULE}")
+
   if(CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-    set(VDIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Verilog)
+    set(_vdir "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Verilog")
   elseif(CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
-    set(VDIR ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/Verilog)
+    set(_vdir "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/Verilog")
   else()
-    set(VDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir)
+    set(_vdir "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${_target}.dir")
   endif()
-  file(MAKE_DIRECTORY ${VDIR})
+  
+  file(MAKE_DIRECTORY "${_vdir}")
 
-  # Determine output verilog path and set it as the target's dependency
-  set(GENERATED_VLOG_SOURCE ${VDIR}/${TOP_MODULE}.v)
-  add_custom_target(${TARGET} ALL DEPENDS ${GENERATED_VLOG_SOURCE})
+  # Define the path for the generated Verilog file
+  set(_generated_vlog "${_vdir}/${TOP_MODULE}.v")
+  add_custom_target(${_target} ALL DEPENDS "${_generated_vlog}")
 
-  # Add dependencies if specified
-  if(VLOG_LINK_LIBS)
-    add_dependencies(${TARGET} ${VLOG_LINK_LIBS})
+  if(ARG_LINK_LIBS)
+    add_dependencies(${_target} ${ARG_LINK_LIBS})
   endif()
 
-  # Make output paths for blue objects
-  set(BDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir/${TOP_MODULE}.dir)
-  file(MAKE_DIRECTORY ${BDIR})
+  # 3. Set intermediate artifact path (BDIR)
+  set(_bdir "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${_target}.dir/${TOP_MODULE}.dir")
+  file(MAKE_DIRECTORY "${_bdir}")
 
-  # Setup search and output path
-  bsc_setup_path_flags(VLOG_BSC_FLAGS
-    BDIR ${BDIR}
-    INFO_DIR ${BDIR}
-    VDIR ${VDIR}
-    SRC_DIRS ${VLOG_SRC_DIRS}
-    LINK_LIBS ${VLOG_LINK_LIBS}
+  # 4. Prepare BSC compilation flags
+  set(_vlog_flags ${ARG_BSC_FLAGS})
+  bsc_setup_path_flags(_vlog_flags
+    BDIR      "${_bdir}"
+    INFO_DIR  "${_bdir}"
+    VDIR      "${_vdir}"
+    SRC_DIRS  ${_src_dirs}
+    LINK_LIBS ${ARG_LINK_LIBS}
   )
 
-  # Flags for Bluesim and elaboration
-  bsc_setup_verilog_flags(VLOG_BSC_FLAGS)
-  set(BSC_COMMAND ${BSC_BIN} ${VLOG_BSC_FLAGS})
+  bsc_setup_verilog_flags(_vlog_flags)
+  set(_bsc_cmd ${BSC_BIN} ${_vlog_flags})
 
-  # 1. Partial compilation
-  bsc_pre_elaboration(BLUESPEC_OBJECTS ${ROOT_SOURCE} BSC_FLAGS ${VLOG_BSC_FLAGS})
+  # 5. Calculate Hash and execute Pre-elaboration (with caching mechanism)
+  string(MD5 _hash "${_abs_root_source};${TOP_MODULE};${ARGN}")
 
-  # 2. Verilog code generation
-  string(REPLACE "${CMAKE_BINARY_DIR}/" "" GENERATED_VLOG_SOURCE_PATH ${GENERATED_VLOG_SOURCE})
+  bsc_pre_elaboration(
+    _blue_objects ${_hash} ${_all_sources}
+    BSC_FLAGS ${_vlog_flags}
+  )
+
+  # 6. Verilog Code Generation
+  file(RELATIVE_PATH _vlog_path_rel "${CMAKE_BINARY_DIR}" "${_generated_vlog}")
+  
   add_custom_command(
-    OUTPUT  ${GENERATED_VLOG_SOURCE}
-    COMMAND ${BSC_COMMAND} "-g" ${TOP_MODULE} ${ROOT_SOURCE}
-            && touch ${GENERATED_VLOG_SOURCE}
-    DEPENDS ${BLUESPEC_OBJECTS}
-    COMMENT "Generating Verilog source ${GENERATED_VLOG_SOURCE_PATH}"
+    OUTPUT  "${_generated_vlog}"
+    COMMAND ${_bsc_cmd} "-g" ${TOP_MODULE} "${_abs_root_source}"
+    COMMAND ${CMAKE_COMMAND} -E touch "${_generated_vlog}"
+    DEPENDS ${_blue_objects}
+    COMMENT "Generating Verilog source ${_vlog_path_rel}"
     VERBATIM
   )
 endfunction()

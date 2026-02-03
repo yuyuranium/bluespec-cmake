@@ -1,69 +1,94 @@
 cmake_minimum_required(VERSION 3.22)
 
-if(_BLUESPEC_LIBRARY)
-  return()
-endif()
-set(_BLUESPEC_LIBRARY)
+include_guard(GLOBAL)
 
 include(BluespecUtils)
 
 # Function: add_bsc_library
 #   Compile *.bsv files to *.bo binary representation.
 #
+# Usage:
+#   add_bsc_library(<ROOT_SOURCE> [source_files...]
+#                   [BSC_FLAGS <flags...>]
+#                   [LINK_LIBS <libs...>])
+#
 # Arguments:
-#   ROOT_SOURCE - Source to the root compilation unit.
-#   BSC_FLAGS   - Multiple flags to be appended during compilation.
-#   SRC_DIRS    - List of directories for *.bsv and *.bo.
-#   LINK_LIBS   - List of targets to link against.
+#   ROOT_SOURCE  - Source to the root compilation unit.
+#   source_files - Additional source files/directories to include in search path.
+#
+# Options:
+#   BSC_FLAGS - Multiple flags to be appended during compilation.
+#   LINK_LIBS - List of targets to link against.
 #
 # Generates:
 #   A target whose name is the package name of the source.
 function(add_bsc_library ROOT_SOURCE)
-  cmake_parse_arguments(BO ""
-                           ""
-                           "BSC_FLAGS;SRC_DIRS;LINK_LIBS"
-                           ${ARGN})
-  # Use absolute path
-  get_filename_component(ROOT_SOURCE ${ROOT_SOURCE} ABSOLUTE)
+  set(_options)
+  set(_one_args)
+  set(_multi_args   BSC_FLAGS  LINK_LIBS)
 
-  # Get package name and set it as target
-  bsc_package_name(TARGET ${ROOT_SOURCE})
+  cmake_parse_arguments(ARG "${_options}" "${_one_args}" "${_multi_args}" ${ARGN})
 
-  # Determine BDIR
+  # 1. Handle absolute paths and extract directories (replacing original SRC_DIRS)
+  get_filename_component(_abs_root_source "${ROOT_SOURCE}" ABSOLUTE)
+  
+  set(_all_sources "${_abs_root_source}")
+  set(_src_dirs "")
+
+  # Extract directories from the remaining sources
+  foreach(_src ${ARG_UNPARSED_ARGUMENTS})
+    get_filename_component(_abs_path "${_src}" ABSOLUTE)
+    list(APPEND _all_sources "${_abs_path}")
+    get_filename_component(_dir_path "${_abs_path}" DIRECTORY)
+    list(APPEND _src_dirs "${_dir_path}")
+  endforeach()
+
+  list(REMOVE_DUPLICATES _all_sources)
+  list(REMOVE_DUPLICATES _src_dirs)
+
+  # 2. Get Package Name and set it as Target name
+  bsc_package_name(_target "${_abs_root_source}")
+
+  # 3. Determine compilation output directory (BDIR)
   if(CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-    set(BDIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Libraries)
+    set(_bdir "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/Libraries")
   elseif(CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
-    set(BDIR ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/Libraries)
+    set(_bdir "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/Libraries")
   else()
-    set(BDIR ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.dir)
+    set(_bdir "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${_target}.dir")
   endif()
-  file(MAKE_DIRECTORY ${BDIR})
+  
+  file(MAKE_DIRECTORY "${_bdir}")
 
-  # Determine output library path and set it as the target's dependency
-  set(GENERATED_BLUESIM_LIB ${BDIR}/${TARGET}.bo)
-  add_custom_target(${TARGET} ALL DEPENDS ${GENERATED_BLUESIM_LIB})
+  # 4. Define the path for the generated .bo file and the Target
+  set(_generated_bo "${_bdir}/${_target}.bo")
+  add_custom_target(${_target} ALL DEPENDS "${_generated_bo}")
 
-  # Add dependencies if specified
-  if(BO_LINK_LIBS)
-    add_dependencies(${TARGET} ${BO_LINK_LIBS})
+  # 5. Handle dependencies
+  if(ARG_LINK_LIBS)
+    add_dependencies(${_target} ${ARG_LINK_LIBS})
   endif()
 
-  # To link with the target, one should search for the BDIR (LINK_DIRECTORIES)
-  set_target_properties(
-    ${TARGET}
+  # 6. Set Target properties
+  set_target_properties(${_target}
     PROPERTIES
-      LINK_DIRECTORIES ${BDIR}
+      LINK_DIRECTORIES "${_bdir}"
   )
 
-  bsc_setup_path_flags(BO_BSC_FLAGS
-    BDIR ${BDIR}
-    INFO_DIR ${BDIR}
-    SRC_DIRS ${BO_SRC_DIRS}
-    LINK_LIBS ${BO_LINK_LIBS}
+  # 7. Prepare BSC compilation flags (using automatically extracted _src_dirs)
+  set(_final_flags ${ARG_BSC_FLAGS})
+  bsc_setup_path_flags(_final_flags
+    BDIR      ${_bdir}
+    INFO_DIR  ${_bdir}
+    SRC_DIRS  ${_src_dirs}
+    LINK_LIBS ${ARG_LINK_LIBS}
   )
 
-  # Compile to *.bo
-  bsc_pre_elaboration(BLUESPEC_OBJECTS ${ROOT_SOURCE}
-    BSC_FLAGS ${BO_BSC_FLAGS}
+  string(MD5 _hash "${ROOT_SOURCE};${ARGN}")
+
+  # 8. Execute Pre-elaboration
+  bsc_pre_elaboration(
+    BLUESPEC_OBJECTS ${_hash} ${_all_sources}
+    BSC_FLAGS ${_final_flags}
   )
 endfunction()

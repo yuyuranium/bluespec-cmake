@@ -1,20 +1,21 @@
 cmake_minimum_required(VERSION 3.22)
 
-if(_BLUESIM_WAVEFORM)
-  return()
-endif()
-set(_BLUESIM_WAVEFORM)
+include_guard(GLOBAL)
 
 # Function: generate_bluesim_waveform
 #   Run the Bluesim executable and generate a VCD waveform file.
 #
+# Usage:
+#   generate_bluesim_waveform(<SIM_EXE> [SIM_FLAGS <flags...>])
+#
 # Arguments:
-#   SIM_EXE   - Name of the Bluesim executable (must match the one passed to add_bluesim_executable).
+#   SIM_EXE - Name of the Bluesim executable (must match the one passed to add_bluesim_executable).
+#
+# Options:
 #   SIM_FLAGS - Optional list of flags to pass to the Bluesim executable.
 #
 # Generates:
 #   A target named "Bluesim.<SIM_EXE>.vcd" that runs the executable to produce the VCD waveform file.
-
 function(generate_bluesim_waveform SIM_EXE)
   # Parse optional arguments
   cmake_parse_arguments(BSIM "" "" "SIM_FLAGS" ${ARGN})
