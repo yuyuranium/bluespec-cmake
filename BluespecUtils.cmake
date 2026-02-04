@@ -319,7 +319,7 @@ endfunction()
 function(bsc_pre_elaboration BLUESPEC_OBJECTS HASH)
   set(_options)
   set(_one_args)
-  set(_multi_args   BSC_FLAGS)
+  set(_multi_args   BSC_FLAGS   LINK_LIBS)
   cmake_parse_arguments(ARG "${_options}" "${_one_args}" "${_multi_args}" ${ARGN})
 
   set(_sources ${ARG_UNPARSED_ARGUMENTS})
@@ -381,6 +381,16 @@ function(bsc_pre_elaboration BLUESPEC_OBJECTS HASH)
     set("${_internal_kv_prefix}_DEP_${_abs_src}" "${_deps_list}")
   endforeach()
 
+  set(_link_lib_files "")
+  foreach(_lib ${ARG_LINK_LIBS})
+    if(TARGET ${_lib})
+      get_target_property(_lib_bo_path ${_lib} BSC_OUTPUT_FILE)
+      if(_lib_bo_path)
+        list(APPEND _link_lib_files "${_lib_bo_path}")
+      endif()
+    endif()
+  endforeach()
+
   # 3. Iterate through SOURCES provided by the developer and match with KV-store
   set(_local_objs "")
   set(_bsc_cmd ${BSC_BIN} ${ARG_BSC_FLAGS})
@@ -400,7 +410,7 @@ function(bsc_pre_elaboration BLUESPEC_OBJECTS HASH)
         OUTPUT  "${_target}"
         COMMAND ${_bsc_cmd} "${_abs_s}"
         COMMENT "Building Bluespec object ${_target_path}"
-        DEPENDS ${_deps}
+        DEPENDS ${_deps} ${_link_lib_files}
         VERBATIM
       )
     else()

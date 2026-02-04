@@ -99,6 +99,7 @@ function(add_bluesim_systemc_library TARGET TOP_MODULE ROOT_SOURCE)
   bsc_pre_elaboration(
     _blue_objects ${_hash} ${_all_sources}
     BSC_FLAGS ${_bsim_sc_flags}
+    LINK_LIBS ${ARG_LINK_LIBS}
   )
 
   # 5. Elaborate Bluespec module

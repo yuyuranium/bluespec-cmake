@@ -73,6 +73,7 @@ function(add_bsc_library ROOT_SOURCE)
   set_target_properties(${_target}
     PROPERTIES
       LINK_DIRECTORIES "${_bdir}"
+      BSC_OUTPUT_FILE  "${_generated_bo}"
   )
 
   # 7. Prepare BSC compilation flags (using automatically extracted _src_dirs)
@@ -90,5 +91,6 @@ function(add_bsc_library ROOT_SOURCE)
   bsc_pre_elaboration(
     BLUESPEC_OBJECTS ${_hash} ${_all_sources}
     BSC_FLAGS ${_final_flags}
+    LINK_LIBS ${ARG_LINK_LIBS}
   )
 endfunction()

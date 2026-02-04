@@ -98,6 +98,7 @@ function(add_bluesim_executable SIM_EXE TOP_MODULE ROOT_SOURCE)
   bsc_pre_elaboration(
     _blue_objects ${_hash} ${_all_sources}
     BSC_FLAGS ${_bsim_flags}
+    LINK_LIBS ${ARG_LINK_LIBS}
   )
 
   # 5. Bluesim Code Generation (Elaboration)

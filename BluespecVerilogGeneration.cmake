@@ -90,6 +90,7 @@ function(generate_verilog TOP_MODULE ROOT_SOURCE)
   bsc_pre_elaboration(
     _blue_objects ${_hash} ${_all_sources}
     BSC_FLAGS ${_vlog_flags}
+    LINK_LIBS ${ARG_LINK_LIBS}
   )
 
   # 6. Verilog Code Generation
