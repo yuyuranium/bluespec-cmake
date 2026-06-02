@@ -421,3 +421,137 @@ function(bsc_pre_elaboration BLUESPEC_OBJECTS HASH)
   # Return the list of generated objects
   set(${BLUESPEC_OBJECTS} "${_local_objs}" PARENT_SCOPE)
 endfunction()
+
+# Internal helper:
+#   Creates a CMake -P script that unwraps translate_off/on blocks when
+#   the block body matches MATCH_REGEX.
+#
+# Meaning:
+#   INPUT         : input file
+#   OUTPUT        : output file
+#   MATCH_REGEX   : regex searched inside each translate_off block
+#   REQUIRE_MATCH : if ON, fail when no matching block is found
+function(_get_unwrap_translate_off_script OUT_SCRIPT)
+  set(_script "${CMAKE_CURRENT_BINARY_DIR}/UnwrapTranslateOffBlocks.cmake")
+
+  if(NOT EXISTS "${_script}")
+    file(WRITE "${_script}" [=[
+if(NOT DEFINED INPUT OR INPUT STREQUAL "")
+  message(FATAL_ERROR "UnwrapTranslateOffBlocks: INPUT is required")
+endif()
+
+if(NOT EXISTS "${INPUT}")
+  message(FATAL_ERROR "UnwrapTranslateOffBlocks: INPUT does not exist: ${INPUT}")
+endif()
+
+if(NOT DEFINED OUTPUT OR OUTPUT STREQUAL "")
+  set(OUTPUT "${INPUT}")
+endif()
+
+if(NOT DEFINED MATCH_REGEX OR MATCH_REGEX STREQUAL "")
+  message(FATAL_ERROR "UnwrapTranslateOffBlocks: MATCH_REGEX is required")
+endif()
+
+if(NOT DEFINED REQUIRE_MATCH)
+  set(REQUIRE_MATCH OFF)
+endif()
+
+set(_translate_off_re "^[ \t]*//[ \t]*(synopsys|synthesis)[ \t]+translate_off")
+set(_translate_on_re  "^[ \t]*//[ \t]*(synopsys|synthesis)[ \t]+translate_on")
+
+file(READ "${INPUT}" _content)
+
+# Protect semicolons before converting the text into a CMake list.
+# This matters because Verilog/SystemVerilog lines usually contain semicolons.
+string(REPLACE ";" "\\;" _content "${_content}")
+
+# Normalize CRLF to LF.
+string(REPLACE "\r\n" "\n" _content "${_content}")
+string(REPLACE "\r" "\n" _content "${_content}")
+
+# Split into lines.
+string(REPLACE "\n" ";" _lines "${_content}")
+
+set(_out "")
+set(_in_translate_block FALSE)
+set(_block_has_match FALSE)
+set(_block_start_line "")
+set(_block_body "")
+set(_matched_blocks 0)
+
+foreach(_line IN LISTS _lines)
+  if(NOT _in_translate_block)
+    if(_line MATCHES "${_translate_off_re}")
+      set(_in_translate_block TRUE)
+      set(_block_has_match FALSE)
+      set(_block_start_line "${_line}")
+      set(_block_body "")
+    else()
+      string(APPEND _out "${_line}\n")
+    endif()
+  else()
+    if(_line MATCHES "${MATCH_REGEX}")
+      set(_block_has_match TRUE)
+    endif()
+
+    if(_line MATCHES "${_translate_on_re}")
+      if(_block_has_match)
+        # Remove only translate_off/on wrapper.
+        # Keep the block body.
+        string(APPEND _out "${_block_body}")
+        math(EXPR _matched_blocks "${_matched_blocks} + 1")
+      else()
+        # Preserve unrelated translate_off block.
+        string(APPEND _out "${_block_start_line}\n")
+        string(APPEND _out "${_block_body}")
+        string(APPEND _out "${_line}\n")
+      endif()
+
+      set(_in_translate_block FALSE)
+      set(_block_has_match FALSE)
+      set(_block_start_line "")
+      set(_block_body "")
+    else()
+      string(APPEND _block_body "${_line}\n")
+    endif()
+  endif()
+endforeach()
+
+# If a translate_off block is unterminated, preserve it conservatively.
+if(_in_translate_block)
+  string(APPEND _out "${_block_start_line}\n")
+  string(APPEND _out "${_block_body}")
+endif()
+
+if(_matched_blocks EQUAL 0)
+  if(REQUIRE_MATCH)
+    message(FATAL_ERROR
+      "UnwrapTranslateOffBlocks: no translate_off block matching "
+      "'${MATCH_REGEX}' was found in ${INPUT}"
+    )
+  else()
+    message(STATUS
+      "UnwrapTranslateOffBlocks: no translate_off block matching "
+      "'${MATCH_REGEX}' was found in ${INPUT}; copying input unchanged"
+    )
+  endif()
+endif()
+
+set(_tmp "${OUTPUT}.tmp")
+file(WRITE "${_tmp}" "${_out}")
+
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_tmp}" "${OUTPUT}"
+  COMMAND_ERROR_IS_FATAL ANY
+)
+
+file(REMOVE "${_tmp}")
+
+message(STATUS
+  "UnwrapTranslateOffBlocks: unwrapped ${_matched_blocks} matching block(s): ${OUTPUT}"
+)
+]=])
+  endif()
+
+  set(${OUT_SCRIPT} "${_script}" PARENT_SCOPE)
+endfunction()
