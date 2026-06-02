@@ -34,5 +34,11 @@ endmacro()
 _bsc_find_bin(bsc     BSC_BIN)
 _bsc_find_bin(bluetcl BLUETCL_BIN)
 
+get_filename_component(_BSC_BIN_DIR "${BSC_BIN}" PATH)
+get_filename_component(BSC_LIBRARY_DIR "${_BSC_BIN_DIR}/../lib/Verilog" ABSOLUTE)
+if(NOT IS_DIRECTORY "${BSC_LIBRARY_DIR}")
+  message(FATAL_ERROR "Bluespec Verilog library not found: ${BSC_LIBRARY_DIR}")
+endif()
+
 _bsc_find_library(bskernel)
 _bsc_find_library(bsprim)
