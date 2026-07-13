@@ -486,8 +486,21 @@ def compile_component_package(
     regular_flags, runtime_flags = _split_rts_flags(
         _bsc_flags(owner.definitions, owner.compile_options)
     )
+    # A component-level dependency does not imply that every package in the
+    # consumer imports a package from that dependency.  With package-granular
+    # outer build edges, unrelated consumer packages may therefore compile
+    # before the dependency's output directory has been created.  Do not pass
+    # those not-yet-materialized directories to BSC: it removes them from -p
+    # anyway, but emits S0091 for every package invocation.  When an import
+    # actually needs a dependency package, the generated custom command has a
+    # file-level dependency on that package's .bo, so its directory exists by
+    # the time this command runs.
     package_paths = [
-        *(_canonical(item) for item in dependency_bo_dirs),
+        *(
+            path
+            for item in dependency_bo_dirs
+            if (path := _canonical(item)).is_dir()
+        ),
         *search_dirs,
     ]
     unique_paths: list[Path] = []

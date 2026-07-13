@@ -222,7 +222,6 @@ def _enumerate_sources(
 def _bsc_flags(definitions: Iterable[str], options: Iterable[str]) -> list[str]:
     flags: list[str] = []
     seen_definitions: set[str] = set()
-    seen_options: set[str] = set()
     for definition in definitions:
         value = definition[2:] if definition.startswith("-D") else definition
         # BSC's -D option takes the following token as its value.  Deduplicate
@@ -233,10 +232,10 @@ def _bsc_flags(definitions: Iterable[str], options: Iterable[str]) -> list[str]:
         if value not in seen_definitions:
             flags.extend(("-D", value))
             seen_definitions.add(value)
-    for option in options:
-        if option not in seen_options:
-            flags.append(option)
-            seen_options.add(option)
+    # Options form an ordered token stream.  Do not deduplicate individual
+    # tokens: options such as -Xc and -Xc++ may occur repeatedly, with each
+    # occurrence consuming the following token.
+    flags.extend(options)
     return flags
 
 

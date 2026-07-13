@@ -91,7 +91,17 @@ function(_bsc_append_target_property TARGET PROPERTY)
       list(APPEND _new "${_value}")
     endif()
   endforeach()
-  list(REMOVE_DUPLICATES _new)
+  # Compiler and linker options are ordered token streams.  Repeated option
+  # markers can be significant, for example:
+  #
+  #   -Xc++ -I/path/to/systemc -Xc++ --coverage
+  #
+  # Removing duplicate tokens would drop the second -Xc++ and make BSC parse
+  # --coverage as a source file.  Other properties contain unordered sets of
+  # sources or target names and can still be deduplicated safely.
+  if(NOT "${PROPERTY}" MATCHES "^(INTERFACE_)?BSC_(COMPILE|LINK)_OPTIONS$")
+    list(REMOVE_DUPLICATES _new)
+  endif()
   set_property(TARGET "${TARGET}" PROPERTY "${PROPERTY}" "${_new}")
 endfunction()
 
