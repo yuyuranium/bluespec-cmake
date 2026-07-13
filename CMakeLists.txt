@@ -1,63 +1,48 @@
-cmake_minimum_required(VERSION 3.24...3.28)
+cmake_minimum_required(VERSION 3.30)
 
-project(
-  bluespec-cmake
-  DESCRIPTION "CMake modules for Bluespec targets"
-  LANGUAGES CXX
-  VERSION 0.0.0
+project(BluespecCMake VERSION 1.0.0 LANGUAGES NONE)
+
+if(NOT DEFINED CMAKE_INSTALL_LIBDIR)
+  # GNUInstallDirs cannot infer an architecture for a LANGUAGES NONE project.
+  # The package is intentionally language-neutral, so use the conventional
+  # lib directory unless the caller selected another one.
+  set(CMAKE_INSTALL_LIBDIR lib CACHE PATH "Install library directory")
+endif()
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+set(BSC_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/BluespecCMake")
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/BluespecCMakeConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/BluespecCMakeConfig.cmake"
+  INSTALL_DESTINATION "${BSC_CMAKE_INSTALL_DIR}"
+)
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/BluespecCMakeConfigVersion.cmake"
+  VERSION "${PROJECT_VERSION}"
+  COMPATIBILITY SameMajorVersion
 )
 
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-  set(INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib/cmake/${PROJECT_NAME}")
+install(
+  FILES
+    BluespecCMake.cmake
+    BluespecTargets.cmake
+    FindBluespecToolchain.cmake
+  DESTINATION "${BSC_CMAKE_INSTALL_DIR}"
+)
+install(
+  PROGRAMS
+    tools/bsc_cmake_driver.py
+    tools/bsc_graph.py
+  DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/bluespec-cmake"
+)
+install(
+  FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/BluespecCMakeConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/BluespecCMakeConfigVersion.cmake"
+  DESTINATION "${BSC_CMAKE_INSTALL_DIR}"
+)
 
-  # Install CMake scripts
-  install(
-    FILES
-      ./BluesimExecutable.cmake
-      ./BluesimSystemC.cmake
-      ./BluesimWaveform.cmake
-      ./BluespecLibrary.cmake
-      ./BluespecPaths.cmake
-      ./BluespecTargets.cmake
-      ./BluespecUtils.cmake
-      ./BluespecVerilogGeneration.cmake
-      ./FindBluespecToolchain.cmake
-    DESTINATION
-      ${INSTALL_DIR}
-  )
-
-  # Install tcl scripts
-  install(
-    PROGRAMS
-      ./synmodules.tcl
-    DESTINATION
-      ${INSTALL_DIR}
-  )
-
-  # Generate package config file
-  include(CMakePackageConfigHelpers)
-  configure_package_config_file(
-    bluespec-cmake-config.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/bluespec-cmake-config.cmake
-    INSTALL_DESTINATION
-      ${INSTALL_DIR}
-  )
-
-  # Generate package version file
-  write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/bluespec-cmake-config-version.cmake
-    VERSION
-      ${PROJECT_VERSION}
-    COMPATIBILITY
-      AnyNewerVersion
-  )
-
-  # Install package config and version files
-  install(
-    FILES
-      ${CMAKE_CURRENT_BINARY_DIR}/bluespec-cmake-config.cmake
-      ${CMAKE_CURRENT_BINARY_DIR}/bluespec-cmake-config-version.cmake
-    DESTINATION
-      ${INSTALL_DIR}
-  )
-endif()
+# Vendored use has the same entry point as installed use.
+include("${CMAKE_CURRENT_SOURCE_DIR}/BluespecCMake.cmake")

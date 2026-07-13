@@ -1,5 +1,0 @@
-@PACKAGE_INIT@
-
-list(APPEND CMAKE_MODULE_PATH @INSTALL_DIR@)
-
-include(BluespecTargets)

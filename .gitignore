@@ -1,2 +1,5 @@
 build*
 result*
+
+__pycache__/
+*.pyc
