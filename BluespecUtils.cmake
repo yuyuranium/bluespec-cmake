@@ -23,7 +23,7 @@ function(bsc_package_name PKG_NAME SOURCE)
   get_filename_component(_PKG_NAME ${SOURCE} NAME_WE)
   get_filename_component(_EXT ${SOURCE} EXT)
   # Make sure file extension is bsv.
-  if(${_EXT} STREQUAL ".bsv")
+  if(${_EXT} STREQUAL ".bsv" OR ${_EXT} STREQUAL ".bs")
     set(${PKG_NAME} ${_PKG_NAME} PARENT_SCOPE)
   endif()
 endfunction()
