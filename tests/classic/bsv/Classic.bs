@@ -1,0 +1,4 @@
+package Classic(result) where
+
+result :: Bit 8 -> Bit 8
+result x = x + 1

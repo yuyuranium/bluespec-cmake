@@ -46,3 +46,8 @@ install(
 
 # Vendored use has the same entry point as installed use.
 include("${CMAKE_CURRENT_SOURCE_DIR}/BluespecCMake.cmake")
+
+include(CTest)
+if(BUILD_TESTING)
+  add_subdirectory(tests)
+endif()
