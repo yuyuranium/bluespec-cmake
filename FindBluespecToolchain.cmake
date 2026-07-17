@@ -5,17 +5,21 @@ find_program(BSC_BIN NAMES bsc HINTS ENV BLUESPEC_HOME)
 find_program(BLUETCL_BIN NAMES bluetcl HINTS ENV BLUESPEC_HOME)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-set(BSC_BIN "${BSC_BIN}" CACHE FILEPATH "BSC compiler" FORCE)
-set(BLUETCL_BIN "${BLUETCL_BIN}" CACHE FILEPATH "Bluetcl dependency scanner" FORCE)
-set(Python3_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH "Python interpreter used by BluespecCMake" FORCE)
-
 if(NOT BSC_BIN OR NOT BLUETCL_BIN)
   message(FATAL_ERROR
     "BluespecCMake requires both bsc and bluetcl. "
     "Set BLUESPEC_HOME or add the BSC bin directory to PATH.")
 endif()
 
-get_filename_component(_bsc_realpath "${BSC_BIN}" REALPATH)
+# The toolchain may be reached through symbolic links (package managers,
+# per-user profiles).  bsc and bluetcl locate their own libraries relative
+# to the invoked path, so resolve them before any invocation.
+file(REAL_PATH "${BSC_BIN}" _bsc_realpath EXPAND_TILDE)
+file(REAL_PATH "${BLUETCL_BIN}" _bluetcl_realpath EXPAND_TILDE)
+set(BSC_BIN "${_bsc_realpath}" CACHE FILEPATH "BSC compiler" FORCE)
+set(BLUETCL_BIN "${_bluetcl_realpath}" CACHE FILEPATH "Bluetcl dependency scanner" FORCE)
+set(Python3_EXECUTABLE "${Python3_EXECUTABLE}" CACHE FILEPATH "Python interpreter used by BluespecCMake" FORCE)
+
 get_filename_component(_bsc_bin_dir "${_bsc_realpath}" DIRECTORY)
 get_filename_component(BLUESPEC_DIR "${_bsc_bin_dir}/.." ABSOLUTE)
 set(BLUESPEC_DIR "${BLUESPEC_DIR}" CACHE PATH "BSC installation root" FORCE)
