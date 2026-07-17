@@ -31,6 +31,10 @@ class DriverError(RuntimeError):
     pass
 
 
+# BSC accepts both BSV (.bsv) and Bluespec Classic/Haskell (.bs) packages.
+BSC_SOURCE_SUFFIXES = (".bsv", ".bs")
+
+
 _ACTIVE_CHILD: subprocess.Popen[str] | None = None
 
 
@@ -200,7 +204,7 @@ def _enumerate_sources(
     seen: set[tuple[str, Path, str]] = set()
 
     def add(component: str, source: Path) -> None:
-        if source.suffix != ".bsv" or not source.exists():
+        if source.suffix not in BSC_SOURCE_SUFFIXES or not source.exists():
             return
         package = source.stem
         key = (package, source, component)
@@ -291,7 +295,7 @@ def _parse_makedepend(output: str) -> tuple[dict[str, set[str]], set[Path]]:
         for token in tokens:
             if token.endswith(".bo"):
                 edges[current].add(Path(token).stem)
-            elif token.endswith(".bsv") or Path(token).exists():
+            elif token.endswith(BSC_SOURCE_SUFFIXES) or Path(token).exists():
                 inputs.add(_canonical(token))
     return edges, inputs
 
