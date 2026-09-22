@@ -47,3 +47,6 @@ bsc_add_regression_test(symlinked-toolchain classic
   BUILD_OPTIONS
     "-DBSC_BIN=${_symlink_dir}/bsc"
     "-DBLUETCL_BIN=${_symlink_dir}/bluetcl")
+
+add_test(NAME compile-commands
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.py")

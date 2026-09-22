@@ -241,6 +241,7 @@ function(_bsc_component_request TARGET)
   # Keep its template outside the cleaned target work directory, then make
   # the request itself an ordinary custom-command output.
   set(_template "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.component.request.in")
+  set_property(TARGET "${TARGET}" PROPERTY BSC_REQUEST_TEMPLATE "${_template}")
   file(GENERATE OUTPUT "${_template}" CONTENT
 "schema=1
 kind=component
@@ -285,6 +286,7 @@ function(_bsc_endpoint_request TARGET BACKEND TOP SOURCE)
   set(_request "${_work}/endpoint.request")
   file(MAKE_DIRECTORY "${_work}")
   set(_template "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${TARGET}.endpoint.request.in")
+  set_property(TARGET "${TARGET}" PROPERTY BSC_REQUEST_TEMPLATE "${_template}")
   file(GENERATE OUTPUT "${_template}" CONTENT
 "schema=1
 kind=endpoint
@@ -1178,3 +1180,56 @@ function(bsc_add_waveform TARGET)
   add_custom_target("${TARGET}" ALL DEPENDS "${_waveform}")
   set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${_work}")
 endfunction()
+
+# Read the generated request templates directly: exporting editor settings
+# must not depend on package compilation or endpoint artifacts.
+function(_bsc_compile_commands_target)
+  get_property(_components GLOBAL PROPERTY BSC_COMPONENT_TARGETS)
+  get_property(_endpoints GLOBAL PROPERTY BSC_ENDPOINTS)
+  set(_contexts "")
+  foreach(_target IN LISTS _components _endpoints)
+    get_target_property(_kind "${_target}" BSC_TARGET_KIND)
+    get_target_property(_request "${_target}" BSC_REQUEST_TEMPLATE)
+    get_target_property(_directory "${_target}" BSC_BINARY_DIRECTORY)
+    if(_kind STREQUAL "COMPONENT")
+      _bsc_component_build_closure("${_target}" _closure)
+    else()
+      _bsc_refresh_endpoint_components("${_target}")
+      get_target_property(_closure "${_target}" BSC_COMPONENTS)
+    endif()
+    set(_requests "")
+    foreach(_component IN LISTS _closure)
+      get_target_property(_dependency "${_component}" BSC_REQUEST_TEMPLATE)
+      list(APPEND _requests "${_dependency}")
+    endforeach()
+    list(JOIN _requests "\n" _requests_text)
+    set(_context "${_directory}/CMakeFiles/${_target}.compile-context")
+    file(GENERATE OUTPUT "${_context}" CONTENT
+"request=${_request}
+directory=${_directory}
+components_begin
+${_requests_text}
+components_end
+")
+    list(APPEND _contexts "${_context}")
+  endforeach()
+  list(JOIN _contexts "\n" _contexts_text)
+  set(_index "${CMAKE_BINARY_DIR}/CMakeFiles/bsc-compile-contexts.txt")
+  file(GENERATE OUTPUT "${_index}" CONTENT "${_contexts_text}\n")
+  set(_export_script "${CMAKE_BINARY_DIR}/bsc_compile_commands.cmake")
+  file(GENERATE OUTPUT "${_export_script}" CONTENT
+"execute_process(
+  COMMAND [==[${Python3_EXECUTABLE}]==] [==[${BSC_GRAPH_TOOL}]==] compile-commands
+    --index [==[${_index}]==] --bsc [==[${BSC_BIN}]==]
+    --output [==[${CMAKE_BINARY_DIR}/bsc_compile_commands.json]==]
+  COMMAND_ERROR_IS_FATAL ANY)
+")
+  add_custom_target(bsc_compile_commands
+    COMMAND "${CMAKE_COMMAND}" -P "${_export_script}"
+    BYPRODUCTS "${CMAKE_BINARY_DIR}/bsc_compile_commands.json"
+    COMMENT "Exporting Bluespec compilation database"
+    VERBATIM)
+endfunction()
+
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}"
+  CALL _bsc_compile_commands_target)

@@ -527,6 +527,47 @@ def compile_component_package(
         raise DriverError(f"BSC did not produce expected package object: {output}")
 
 
+def export_compile_commands(index: Path, output: Path, bsc: str) -> None:
+    """Export source-based diagnostic contexts without invoking the toolchain.
+
+    Components win over endpoint contexts; otherwise the first declared target
+    wins. Emit one entry per file because none-ls keeps only one context.
+    """
+    entries: dict[str, dict[str, object]] = {}
+    for context_path in index.read_text(encoding="utf-8").splitlines():
+        if not context_path:
+            continue
+        context = _read_request(Path(context_path))
+        request = _read_request(Path(str(context["request"])))
+        components = [
+            _load_component(Path(path))
+            for path in _as_list(context.get("components"))
+        ]
+        if request.get("kind") == "component":
+            sources = _as_list(request.get("sources"))
+        else:
+            sources = [str(request["top_source"])] if request.get("top_source") else []
+        search_dirs = list(dict.fromkeys([
+            *_all_search_dirs(components),
+            *(_canonical(source).parent for source in sources),
+        ]))
+        arguments = [
+            bsc,
+            *_bsc_flags(_as_list(request.get("definitions")),
+                        _as_list(request.get("compile_options"))),
+            "-p", ":".join(["%/Libraries", *(str(path) for path in search_dirs)]),
+        ]
+        for source in sources:
+            file = str(_canonical(source))
+            entry = {"directory": str(context["directory"]),
+                     "file": file, "arguments": arguments}
+            if file in entries and entries[file] != entry:
+                print(f"bsc_graph: warning: multiple compilation contexts for {file}; "
+                      "keeping the first (components precede endpoints)", file=sys.stderr)
+            entries.setdefault(file, entry)
+    _replace_if_different(output, json.dumps(list(entries.values()), indent=2) + "\n")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="bsc_graph")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -561,9 +602,15 @@ def main(argv: list[str] | None = None) -> int:
     compile_component_parser.add_argument("--bo-dir", type=Path, required=True)
     compile_component_parser.add_argument("--info-dir", type=Path, required=True)
     compile_component_parser.add_argument("--bsc", required=True)
+    export_parser = subparsers.add_parser("compile-commands")
+    export_parser.add_argument("--index", type=Path, required=True)
+    export_parser.add_argument("--output", type=Path, required=True)
+    export_parser.add_argument("--bsc", required=True)
     args = parser.parse_args(argv)
     try:
-        if args.command == "scan-component":
+        if args.command == "compile-commands":
+            export_compile_commands(args.index, args.output, args.bsc)
+        elif args.command == "scan-component":
             scan_component(
                 args.request,
                 args.dependency_request,

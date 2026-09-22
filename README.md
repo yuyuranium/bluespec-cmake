@@ -172,6 +172,46 @@ Within each endpoint, backend linking defaults to one BSC link job when
 `BSC_BUILD_JOBS` is unset. Set `BSC_BUILD_JOBS` explicitly only when the host
 can safely support more concurrent C/C++ compilation.
 
+## Editor compilation database
+
+After configuring, export the Bluespec diagnostic settings with:
+
+```sh
+cmake --build build --target bsc_compile_commands
+```
+
+This writes `build/bsc_compile_commands.json` with absolute `file` paths,
+per-target build `directory` values, and an `arguments` array for each source.
+Point your none-ls source at this build directory; no source-tree symlink is
+created. Re-run the target after changing CMake settings (it regenerates the
+whole database and removes stale entries). Unchanged content keeps its timestamp.
+The database is removed by `clean` and recreated by the export target.
+
+The export uses CMake's generated request templates, including evaluated
+compile definitions and options. Component sources retain their component's
+requirements; endpoint-private settings apply only to the top source. The
+search path contains source directories in the component closure and the top
+source directory, plus `%/Libraries`. It does not require compiled `.bo` files.
+Backend, elaboration, and output flags are not added: the diagnostic client
+supplies those itself. Explicit user compile options are retained verbatim.
+
+Ninja may run the existing import scanners before any target to refresh its
+build graph. To export even when a source cannot be scanned, bypass Ninja after
+configuring:
+
+```sh
+cmake -P build/bsc_compile_commands.cmake
+```
+
+Neither export entry point compiles packages or builds endpoint artifacts.
+The direct script also avoids import scanning entirely.
+
+Each file has one entry: component contexts take precedence over endpoint
+contexts, then declaration order decides. Conflicting contexts emit a warning.
+Use separate build trees if the editor needs different configurations. A
+source-based diagnostic run with `-u` uses the selected file's flags for its
+imports; it does not reproduce distinct flags for every imported component.
+
 ## Testing
 
 The repository carries a ctest-driven regression suite.  Each test configures
