@@ -174,17 +174,20 @@ can safely support more concurrent C/C++ compilation.
 
 ## Editor compilation database
 
-After configuring, export the Bluespec diagnostic settings with:
+A normal build automatically exports the Bluespec diagnostic settings:
 
 ```sh
-cmake --build build --target bsc_compile_commands
+cmake -S . -B build -G Ninja
+cmake --build build
 ```
 
 This writes `build/bsc_compile_commands.json` with absolute `file` paths,
 per-target build `directory` values, and an `arguments` array for each source.
 Point your none-ls source at this build directory; no source-tree symlink is
-created. Re-run the target after changing CMake settings (it regenerates the
-whole database and removes stale entries). Unchanged content keeps its timestamp.
+created. Each default build refreshes the whole database and removes stale
+entries. Unchanged content keeps its timestamp. To export without building
+other default targets, run `cmake --build build --target bsc_compile_commands`.
+Configure alone generates the export settings, not the JSON database.
 The database is removed by `clean` and recreated by the export target.
 
 The export uses CMake's generated request templates, including evaluated

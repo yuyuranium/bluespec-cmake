@@ -1224,7 +1224,7 @@ components_end
     --output [==[${CMAKE_BINARY_DIR}/bsc_compile_commands.json]==]
   COMMAND_ERROR_IS_FATAL ANY)
 ")
-  add_custom_target(bsc_compile_commands
+  add_custom_target(bsc_compile_commands ALL
     COMMAND "${CMAKE_COMMAND}" -P "${_export_script}"
     BYPRODUCTS "${CMAKE_BINARY_DIR}/bsc_compile_commands.json"
     COMMENT "Exporting Bluespec compilation database"

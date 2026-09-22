@@ -56,7 +56,9 @@ bsc_target_compile_definitions(sim PRIVATE "$<$<CONFIG:Debug>:SIMULATION>")
     (source / "CMakeLists.txt").write_text(cmake[:cmake.index("bsc_add_bluesim")])
     run("cmake", "-S", str(source), "-B", str(build))
     run("cmake", "--build", str(build), "--target", "clean")
-    run("cmake", "--build", str(build), "--target", "bsc_compile_commands")
+    assert not database.exists()
+    # A normal build automatically recreates the database.
+    run("cmake", "--build", str(build))
     assert [Path(e["file"]).name for e in json.loads(database.read_text())] == ["Base.bsv"]
     # Broken sources and paths with spaces must not prevent direct export.
     spaced = source / "space dir"
