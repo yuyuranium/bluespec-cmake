@@ -675,8 +675,23 @@ def _generate_endpoint(
         # BSC emits module objects, model objects, and the SystemC wrapper in
         # sim_dir.  Archive only the exact object list observed afterwards.
         link_flags, link_runtime_flags = _split_rts_flags(link_options)
+        # Distinct endpoints can contain different implementations of the same
+        # BSV module.  Static linking otherwise silently selects the first
+        # MOD_<module> class it sees.  Scope internal C++ classes to the endpoint,
+        # leaving the public top, BSV objects, and Verilog hierarchy untouched.
+        prefix = "bsc_" + hashlib.sha256(str(endpoint.get("target")).encode()).hexdigest()[:16]
+        modules = {
+            item.stem for directory in (top_dir, bo_dir, *search_dirs)
+            for item in directory.glob("*.ba")
+        } - {str(endpoint.get("top_module"))}
+        identifiers = {f"MOD_{name}": f"MOD_{prefix}_{name}" for name in sorted(modules)}
+        isolation_flags = [
+            flag for old, new in identifiers.items()
+            for flag in ("-Xc++", f"-D{old}={new}")
+        ]
         link_command = [
-            bsc, "-systemc", *link_flags, "-parallel-sim-link", str(jobs),
+            bsc, "-systemc", *link_flags, *isolation_flags,
+            "-parallel-sim-link", str(jobs),
             "-e", str(endpoint.get("top_module")),
             "-bdir", str(top_dir), "-simdir", str(sim_dir), "-info-dir", str(info_dir),
             "-p", path_arg,
@@ -690,8 +705,13 @@ def _generate_endpoint(
             _die(f"SystemC endpoint produced no object files for {endpoint.get('top_module')}")
         archive = artifact_dir / f"lib{endpoint.get('target')}.a"
         _run([ar, "rcs", str(archive), *(str(item) for item in objects)], cwd=sim_dir)
+        identifiers.update({f"__{name}_h__": f"{prefix}_{name}_h" for name in modules})
+        identifier_pattern = re.compile(r"\b(?:" + "|".join(map(re.escape, identifiers)) + r")\b")
         for generated in sim_dir.glob("*.h"):
-            shutil.copy2(generated, artifact_dir / generated.name)
+            header = generated.read_text(encoding="utf-8")
+            if identifiers:
+                header = identifier_pattern.sub(lambda match: identifiers[match[0]], header)
+            (artifact_dir / generated.name).write_text(header, encoding="utf-8")
         return
 
     if backend == "verilog":

@@ -1,0 +1,21 @@
+cmake_minimum_required(VERSION 3.30)
+project(SystemCIsolation LANGUAGES CXX)
+find_package(SystemCLanguage CONFIG REQUIRED)
+include("${CMAKE_CURRENT_LIST_DIR}/../../BluespecCMake.cmake")
+
+# Both endpoints intentionally define mkChild with different behavior.
+bsc_add_library(first_child SOURCES Child.bsv)
+bsc_target_compile_definitions(first_child PUBLIC INITIAL_VALUE=7)
+bsc_add_library(second_child SOURCES Child.bsv)
+bsc_target_compile_definitions(second_child PUBLIC INITIAL_VALUE=41)
+bsc_add_systemc_library(first TOP mkFirst SOURCE First.bsv)
+bsc_target_link_libraries(first PRIVATE first_child)
+bsc_add_systemc_library(second TOP mkSecond SOURCE Second.bsv)
+bsc_target_link_libraries(second PRIVATE second_child)
+
+add_executable(consumer consumer.cc)
+target_compile_features(consumer PRIVATE cxx_std_17)
+target_link_libraries(consumer PRIVATE first second)
+enable_testing()
+add_test(NAME systemc_model_isolation COMMAND consumer)
+set_tests_properties(systemc_model_isolation PROPERTIES TIMEOUT 10)

@@ -235,6 +235,17 @@ ctest --test-dir build --output-on-failure
 Pass `-DBUILD_TESTING=OFF` to skip the suite.  Tests require `bsc`,
 `bluetcl`, Ninja, and Python 3.
 
+SystemC endpoints retain their public top names and isolate generated internal
+C++ classes. The isolation fixture links two endpoints with different
+implementations of the same child module and checks both results in one process.
+Enable SystemC regressions by supplying the installed package's config directory:
+
+```sh
+cmake -S . -B build -G Ninja \
+  -DSystemCLanguage_DIR=/path/to/systemc/lib/cmake/SystemCLanguage
+ctest --test-dir build --output-on-failure
+```
+
 ## Related work
 
 - The BSC distribution's recommended flow is Make-based: `bsc -u` recompiles

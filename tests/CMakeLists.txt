@@ -55,3 +55,10 @@ add_test(NAME compile-commands
 
 bsc_add_regression_test(synthesis-boundaries synthesis-boundaries
   TEST_COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure)
+
+# SystemC fixtures need an installed package; the standalone projects enable C++.
+if(SystemCLanguage_DIR)
+  bsc_add_regression_test(systemc-isolation systemc-isolation
+    BUILD_OPTIONS "-DSystemCLanguage_DIR=${SystemCLanguage_DIR}"
+    TEST_COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure)
+endif()
