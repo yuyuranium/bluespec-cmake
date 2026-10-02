@@ -137,24 +137,25 @@ import is added or removed, the same Ninja invocation regenerates CMake and
 reloads the updated package edges.  Implementation-only edits rebuild the
 affected package without a configure step.
 
-Package outputs are owned by the component target and live below its normal
-`CMakeFiles/<component>.dir/bo/` work directory.  Building the component target
-materializes that package set.  Every linked endpoint reuses the same `.bo`
-outputs and keeps only top/backend-specific `.ba`, generated native code, RTL,
-and public artifacts below `CMakeFiles/<endpoint>.dir/`.  The endpoint driver
-does not compile component packages or start another build system.
-
-For example, two endpoints linked to `common` share:
+Package outputs are owned by the component target. Building the component
+itself checks its packages below `CMakeFiles/<component>.dir/bo/`. Artifact
+endpoints use backend-specific package sets:
 
 ```text
-CMakeFiles/common.dir/bo/Types.bo
-CMakeFiles/common.dir/bo/Common.bo
+CMakeFiles/common.dir/sim/bo/Common.bo
+CMakeFiles/common.dir/verilog/bo/Common.bo
 ```
 
-They do not create endpoint-local copies.  Component compilation uses only
-the component's own PRIVATE/PUBLIC requirements and the public interfaces of
-its dependencies; endpoint-private flags never propagate backwards into a
-component.
+Bluesim and SystemC endpoints share the `sim` set; Verilog endpoints share the
+`verilog` set. BSC needs the backend when compiling imported packages to
+preserve `(* synthesize *)` module boundaries. Backend-neutral objects would
+silently inline those modules and change their scheduling.
+
+CMake owns all package compilation edges. The endpoint driver elaborates the
+top, links the generated model, and collects component RTL into its public
+filelist. Component compilation uses only the component's own PRIVATE/PUBLIC
+requirements and the public interfaces of its dependencies; endpoint-private
+flags never propagate backwards into a component.
 
 Because BSC package compilation can use substantial memory, its outer Ninja
 edges use a dedicated job pool that defaults to one job. Increase it only when
@@ -221,8 +222,10 @@ The repository carries a ctest-driven regression suite.  Each test configures
 and builds a small standalone project against the working tree, then verifies
 the produced artifacts (running the Bluesim executables, checking generated
 Verilog and VCD output).  The suite covers the shared component graph, VCD
-waveform generation, Bluespec Classic (`.bs`) sources, and symlinked
-toolchains.
+waveform generation, Bluespec Classic (`.bs`) sources, symlinked
+toolchains, and synthesis boundaries. The synthesis-boundary fixture checks
+that imported synthesized modules retain their hierarchy and component-private
+definitions in both Verilog and Bluesim, including a complete RTL filelist.
 
 ```sh
 cmake -S . -B build -G Ninja
@@ -263,7 +266,7 @@ sharing compiled package outputs across all endpoints in a build tree.
   `BLUESPEC_HOME`).
 - Generated files stay under the build tree.  `cmake --build <dir> --target
   clean` removes the Bluespec workspace and endpoint artifacts.
-- Generic component `.bo` outputs are shared by all compatible endpoints in
+- Component `.bo` outputs are shared by endpoints using the same backend in
   the current build tree.  Install/export of precompiled BSV components and
   reuse across independent build trees are planned for Phase 2.
 

@@ -603,6 +603,10 @@ def _build(
                 bsc,
                 ar,
                 jobs=_jobs(1),
+                package_rtl_dirs=[
+                    directory / "rtl" / name
+                    for directory in external_bo_dirs for name in providers
+                ],
             )
 
         manifest = {
@@ -624,7 +628,7 @@ def _build(
 def _generate_endpoint(
     endpoint: dict[str, object], artifact_dir: Path, context_dir: Path,
     bo_dir: Path, info_dir: Path, search_dirs: list[Path], top_source: Path | None,
-    bsc: str, ar: str, *, jobs: int,
+    bsc: str, ar: str, *, jobs: int, package_rtl_dirs: list[Path],
 ) -> None:
     if top_source is None:
         _die("endpoint is missing top source")
@@ -695,6 +699,9 @@ def _generate_endpoint(
         # Do not let removed generated modules survive in the public filelist.
         for old in rtl_dir.glob("*.v"):
             old.unlink()
+        for directory in package_rtl_dirs:
+            for generated in directory.glob("*.v"):
+                shutil.copy2(generated, rtl_dir / generated.name)
         compile_flags, runtime_flags = _split_rts_flags([
             *definitions, *(_as_list(endpoint.get("compile_options")))])
         command = [

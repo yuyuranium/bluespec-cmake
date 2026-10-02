@@ -29,15 +29,15 @@ foreach(_artifact
   endif()
 endforeach()
 
-# Every component package is compiled exactly once into the component's own
-# bo directory; endpoints must share those outputs instead of recompiling.
-foreach(_bo
-    "${BUILD_DIR}/CMakeFiles/base.dir/bo/Base.bo"
-    "${BUILD_DIR}/CMakeFiles/base.dir/bo/Extra.bo"
-    "${BUILD_DIR}/CMakeFiles/left.dir/bo/Left.bo"
-    "${BUILD_DIR}/CMakeFiles/right.dir/bo/Right.bo"
-    "${BUILD_DIR}/CMakeFiles/core.dir/bo/TopLib.bo")
-  if(NOT EXISTS "${_bo}")
-    message(FATAL_ERROR "expected package output was not produced: ${_bo}")
-  endif()
+# Each backend owns one package set shared by all matching endpoints.
+foreach(_backend "" "/sim" "/verilog")
+  foreach(_package base/Base base/Extra left/Left right/Right core/TopLib)
+    string(REPLACE "/" ";" _parts "${_package}")
+    list(GET _parts 0 _component)
+    list(GET _parts 1 _name)
+    set(_bo "${BUILD_DIR}/CMakeFiles/${_component}.dir${_backend}/bo/${_name}.bo")
+    if(NOT EXISTS "${_bo}")
+      message(FATAL_ERROR "expected package output was not produced: ${_bo}")
+    endif()
+  endforeach()
 endforeach()

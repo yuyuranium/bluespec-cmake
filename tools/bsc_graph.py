@@ -470,6 +470,7 @@ def compile_component_package(
     bo_dir: Path,
     info_dir: Path,
     bsc: str,
+    backend: str,
 ) -> None:
     owner, components_list, _, provider_by_name = _load_component_context(
         request_path, dependency_paths
@@ -510,8 +511,20 @@ def compile_component_package(
     path_arg = ":".join(["%/Libraries", *(str(item) for item in unique_paths)])
     bo_dir.mkdir(parents=True, exist_ok=True)
     info_dir.mkdir(parents=True, exist_ok=True)
+    backend_flags = []
+    if backend != "check":
+        backend_flags = [f"-{backend}", "-elab"]
+    if backend == "verilog":
+        # Each package owns its RTL directory so removed synthesize modules
+        # cannot remain in an endpoint's generated filelist after a rebuild.
+        rtl_dir = bo_dir / "rtl" / source.stem
+        rtl_dir.mkdir(parents=True, exist_ok=True)
+        for old in rtl_dir.glob("*.v"):
+            old.unlink()
+        backend_flags += ["-vdir", str(rtl_dir)]
     command = [
         bsc,
+        *backend_flags,
         *regular_flags,
         "-bdir",
         str(bo_dir),
@@ -602,6 +615,9 @@ def main(argv: list[str] | None = None) -> int:
     compile_component_parser.add_argument("--bo-dir", type=Path, required=True)
     compile_component_parser.add_argument("--info-dir", type=Path, required=True)
     compile_component_parser.add_argument("--bsc", required=True)
+    compile_component_parser.add_argument(
+        "--backend", choices=("check", "sim", "verilog"), default="check"
+    )
     export_parser = subparsers.add_parser("compile-commands")
     export_parser.add_argument("--index", type=Path, required=True)
     export_parser.add_argument("--output", type=Path, required=True)
@@ -634,6 +650,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.bo_dir,
                 args.info_dir,
                 args.bsc,
+                args.backend,
             )
         return 0
     except DriverError as exc:

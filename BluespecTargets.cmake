@@ -406,6 +406,10 @@ function(bsc_add_library TARGET)
   _bsc_set_transitive_properties("${TARGET}__bsc_self")
   _bsc_component_request("${TARGET}")
   add_custom_target("${TARGET}__bsc_packages")
+  # Backend-neutral .bo files inline imported synthesize modules. Preserve
+  # their boundaries with one component-owned package set per BSC backend.
+  add_custom_target("${TARGET}__bsc_packages_sim")
+  add_custom_target("${TARGET}__bsc_packages_verilog")
   set_property(TARGET "${TARGET}" PROPERTY
     BSC_PACKAGE_TARGET "${TARGET}__bsc_packages")
   add_dependencies("${TARGET}" "${TARGET}__bsc_packages")
@@ -626,9 +630,12 @@ function(_bsc_component_build_closure TARGET OUT)
   set(${OUT} "${_result}" PARENT_SCOPE)
 endfunction()
 
-function(_bsc_component_output_paths TARGET OUT_SOURCES OUT_PACKAGES OUT_OUTPUTS)
+function(_bsc_component_output_paths TARGET BACKEND OUT_SOURCES OUT_PACKAGES OUT_OUTPUTS)
   get_target_property(_sources "${TARGET}" BSC_PACKAGE_SOURCES)
   _bsc_target_work_directory(_work "${TARGET}")
+  if(NOT BACKEND STREQUAL "check")
+    string(APPEND _work "/${BACKEND}")
+  endif()
   set(_packages "")
   set(_outputs "")
   foreach(_source IN LISTS _sources)
@@ -645,10 +652,10 @@ function(_bsc_component_output_paths TARGET OUT_SOURCES OUT_PACKAGES OUT_OUTPUTS
   set(${OUT_OUTPUTS} "${_outputs}" PARENT_SCOPE)
 endfunction()
 
-function(_bsc_finalize_component TARGET)
+function(_bsc_finalize_component TARGET BACKEND)
   _bsc_component_build_closure("${TARGET}" _closure)
   _bsc_component_output_paths(
-    "${TARGET}" _sources _packages _package_outputs)
+    "${TARGET}" "${BACKEND}" _sources _packages _package_outputs)
   if(NOT _sources)
     message(FATAL_ERROR
       "BluespecCMake component '${TARGET}' has no explicit BSV sources")
@@ -661,6 +668,10 @@ function(_bsc_finalize_component TARGET)
   set(_topology "${_work}/topology.json")
   set(_cache "${_work}/scan-cache.json")
   set(_scan_dir "${_work}/scan")
+  if(NOT BACKEND STREQUAL "check")
+    string(APPEND _work "/${BACKEND}")
+    string(APPEND _package_target "_${BACKEND}")
+  endif()
   set(_bo_dir "${_work}/bo")
   set(_info_dir "${_work}/info")
   file(MAKE_DIRECTORY "${_work}")
@@ -675,7 +686,7 @@ function(_bsc_finalize_component TARGET)
   set(_provider_outputs "")
   foreach(_component IN LISTS _closure)
     _bsc_component_output_paths(
-      "${_component}" _component_sources _component_packages _component_outputs)
+      "${_component}" "${BACKEND}" _component_sources _component_packages _component_outputs)
     list(LENGTH _component_packages _component_count)
     if(_component_count GREATER 0)
       math(EXPR _component_last "${_component_count} - 1")
@@ -709,6 +720,10 @@ function(_bsc_finalize_component TARGET)
       get_target_property(_dependency_package_target
         "${_component}" BSC_PACKAGE_TARGET)
       _bsc_target_work_directory(_dependency_work "${_component}")
+      if(NOT BACKEND STREQUAL "check")
+        string(APPEND _dependency_work "/${BACKEND}")
+        string(APPEND _dependency_package_target "_${BACKEND}")
+      endif()
       list(APPEND _dependency_requests "${_dependency_request}")
       list(APPEND _dependency_request_targets "${_dependency_request_target}")
       list(APPEND _dependency_bo_dirs "${_dependency_work}/bo")
@@ -770,32 +785,34 @@ function(_bsc_finalize_component TARGET)
     endforeach()
   endif()
 
-  set(_scan_command
-    "${Python3_EXECUTABLE}" "${BSC_GRAPH_TOOL}" scan-component
-    --request "${_request}"
-    --output "${_topology}"
-    --cache "${_cache}"
-    --scan-dir "${_scan_dir}"
-    --bsc "${BSC_BIN}"
-    --bluetcl "${BLUETCL_BIN}")
-  foreach(_dependency_request IN LISTS _dependency_requests)
-    list(APPEND _scan_command --dependency-request "${_dependency_request}")
-  endforeach()
-  add_custom_command(
-    OUTPUT "${_topology}"
-    COMMAND ${_scan_command}
-    # Only the component's own sources can change this component's direct
-    # import topology.  Dependency components are represented by their
-    # request producers; depending on every transitive source here would make
-    # a change in a shared library invalidate every consumer's scanner and
-    # would cause unnecessary configure-dependency checks.
-    DEPENDS "${_request}" "${_request_target}"
-      ${_dependency_requests} ${_dependency_request_targets}
-      "${BSC_GRAPH_TOOL}" ${_sources}
-    COMMENT "Scanning Bluespec component graph for ${TARGET}"
-    VERBATIM)
   set(_topology_target "${TARGET}__bsc_topology")
-  add_custom_target("${_topology_target}" DEPENDS "${_topology}")
+  if(BACKEND STREQUAL "check")
+    set(_scan_command
+      "${Python3_EXECUTABLE}" "${BSC_GRAPH_TOOL}" scan-component
+      --request "${_request}"
+      --output "${_topology}"
+      --cache "${_cache}"
+      --scan-dir "${_scan_dir}"
+      --bsc "${BSC_BIN}"
+      --bluetcl "${BLUETCL_BIN}")
+    foreach(_dependency_request IN LISTS _dependency_requests)
+      list(APPEND _scan_command --dependency-request "${_dependency_request}")
+    endforeach()
+    add_custom_command(
+      OUTPUT "${_topology}"
+      COMMAND ${_scan_command}
+      # Only the component's own sources can change this component's direct
+      # import topology.  Dependency components are represented by their
+      # request producers; depending on every transitive source here would make
+      # a change in a shared library invalidate every consumer's scanner and
+      # would cause unnecessary configure-dependency checks.
+      DEPENDS "${_request}" "${_request_target}"
+        ${_dependency_requests} ${_dependency_request_targets}
+        "${BSC_GRAPH_TOOL}" ${_sources}
+      COMMENT "Scanning Bluespec component graph for ${TARGET}"
+      VERBATIM)
+    add_custom_target("${_topology_target}" DEPENDS "${_topology}")
+  endif()
   add_dependencies("${_package_target}" "${_topology_target}")
   if(_dependency_package_targets)
     add_dependencies("${_package_target}" ${_dependency_package_targets})
@@ -827,6 +844,7 @@ function(_bsc_finalize_component TARGET)
       "${Python3_EXECUTABLE}" "${BSC_GRAPH_TOOL}" compile-component
       --request "${_request}"
       --source "${_source}"
+      --backend "${BACKEND}"
       --output "${_bo}"
       --bo-dir "${_bo_dir}"
       --info-dir "${_info_dir}"
@@ -845,16 +863,18 @@ function(_bsc_finalize_component TARGET)
       JOB_POOL bsc_package
       COMMENT "Building Bluespec object ${_display_bo}"
       VERBATIM)
-    set(_node_target "${TARGET}__bsc_bo_${_package}")
+    set(_node_target "${TARGET}__bsc_bo_${BACKEND}_${_package}")
     add_custom_target("${_node_target}" DEPENDS "${_bo}")
     add_dependencies("${_node_target}" "${_topology_target}")
     add_dependencies("${_package_target}" "${_node_target}")
   endforeach()
 
-  set_target_properties("${TARGET}" PROPERTIES
-    BSC_BO_DIRECTORY "${_bo_dir}"
-    BSC_PACKAGE_OUTPUTS "${_package_outputs}"
-    BSC_TOPOLOGY "${_topology}")
+  if(BACKEND STREQUAL "check")
+    set_target_properties("${TARGET}" PROPERTIES
+      BSC_BO_DIRECTORY "${_bo_dir}"
+      BSC_PACKAGE_OUTPUTS "${_package_outputs}"
+      BSC_TOPOLOGY "${_topology}")
+  endif()
   set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES
     "${_topology}" "${_cache}" "${_scan_dir}" "${_bo_dir}" "${_info_dir}")
 endfunction()
@@ -895,11 +915,19 @@ function(_bsc_finalize_endpoint TARGET)
   if(NOT _components OR _components MATCHES "-NOTFOUND$")
     set(_components "")
   endif()
+  set(_package_backend "${_backend}")
+  if(_backend STREQUAL "bluesim" OR _backend STREQUAL "systemc")
+    set(_package_backend sim)
+  endif()
   foreach(_component IN LISTS _components)
     _bsc_component_output_paths(
-      "${_component}" _sources _packages _outputs)
+      "${_component}" "${_package_backend}" _sources _packages _outputs)
     get_target_property(_package_target "${_component}" BSC_PACKAGE_TARGET)
     _bsc_target_work_directory(_component_work "${_component}")
+    if(NOT _package_backend STREQUAL "check")
+      string(APPEND _component_work "/${_package_backend}")
+      string(APPEND _package_target "_${_package_backend}")
+    endif()
     list(APPEND _package_outputs ${_outputs})
     list(APPEND _package_targets "${_package_target}")
     list(APPEND _package_bo_dirs "${_component_work}/bo")
@@ -1032,7 +1060,9 @@ function(_bsc_finalize)
     get_target_property(_component_directory
       "${_component}" BSC_BINARY_DIRECTORY)
     if("${_component_directory}" STREQUAL "${_binary_directory}")
-      _bsc_finalize_component("${_component}")
+      foreach(_backend check sim verilog)
+        _bsc_finalize_component("${_component}" "${_backend}")
+      endforeach()
     endif()
   endforeach()
   get_property(_endpoints GLOBAL PROPERTY BSC_ENDPOINTS)

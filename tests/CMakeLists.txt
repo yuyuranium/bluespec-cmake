@@ -4,7 +4,7 @@
 # BluespecCMake.cmake entry point that add_subdirectory users include.
 
 function(bsc_add_regression_test NAME PROJECT_DIR)
-  cmake_parse_arguments(ARG "" "" "BUILD_OPTIONS" ${ARGN})
+  cmake_parse_arguments(ARG "" "" "BUILD_OPTIONS;TEST_COMMAND" ${ARGN})
   set(_binary_dir "${CMAKE_CURRENT_BINARY_DIR}/${NAME}")
   set(_command
     "${CMAKE_CTEST_COMMAND}"
@@ -15,10 +15,12 @@ function(bsc_add_regression_test NAME PROJECT_DIR)
   if(ARG_BUILD_OPTIONS)
     list(APPEND _command --build-options ${ARG_BUILD_OPTIONS})
   endif()
-  list(APPEND _command
-    --test-command "${CMAKE_COMMAND}"
+  if(NOT ARG_TEST_COMMAND)
+    set(ARG_TEST_COMMAND "${CMAKE_COMMAND}"
       -DBUILD_DIR=${_binary_dir}
       -P "${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_DIR}/check.cmake")
+  endif()
+  list(APPEND _command --test-command ${ARG_TEST_COMMAND})
   add_test(NAME "${NAME}" COMMAND ${_command})
 endfunction()
 
@@ -50,3 +52,6 @@ bsc_add_regression_test(symlinked-toolchain classic
 
 add_test(NAME compile-commands
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.py")
+
+bsc_add_regression_test(synthesis-boundaries synthesis-boundaries
+  TEST_COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure)
