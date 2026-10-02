@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.30)
+project(SystemCIncremental LANGUAGES CXX)
+find_package(SystemCLanguage CONFIG REQUIRED)
+include("${BLUESPEC_CMAKE_SOURCE_DIR}/BluespecCMake.cmake")
+bsc_add_systemc_library(model TOP mkIncremental SOURCE Incremental.bsv)
+add_library(consumer OBJECT consumer.cc)
+target_link_libraries(consumer PRIVATE model)

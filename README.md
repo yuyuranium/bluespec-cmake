@@ -238,6 +238,8 @@ Pass `-DBUILD_TESTING=OFF` to skip the suite.  Tests require `bsc`,
 SystemC endpoints retain their public top names and isolate generated internal
 C++ classes. The isolation fixture links two endpoints with different
 implementations of the same child module and checks both results in one process.
+The incremental fixture changes a model's layout and checks that one build also
+recompiles its C++ consumer against the regenerated headers.
 Enable SystemC regressions by supplying the installed package's config directory:
 
 ```sh

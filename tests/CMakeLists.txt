@@ -61,4 +61,8 @@ if(SystemCLanguage_DIR)
   bsc_add_regression_test(systemc-isolation systemc-isolation
     BUILD_OPTIONS "-DSystemCLanguage_DIR=${SystemCLanguage_DIR}"
     TEST_COMMAND "${CMAKE_CTEST_COMMAND}" --output-on-failure)
+  add_test(NAME systemc-incremental
+    COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/systemc-incremental/check.py"
+      --systemc-dir "${SystemCLanguage_DIR}")
 endif()

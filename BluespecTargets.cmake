@@ -1019,7 +1019,14 @@ function(_bsc_finalize_endpoint TARGET)
       "${_artifact_dir}/${_top}.v"
       "${_artifact_dir}/${TARGET}.f")
   elseif(_backend STREQUAL "systemc")
-    list(APPEND _byproducts "${_artifact_dir}/lib${TARGET}.a")
+    # Native consumers discover these headers through compiler depfiles.
+    # Declare their producer so one build regenerates AND recompiles users
+    # of a changed model layout, including changes in nested module headers.
+    list(APPEND _byproducts
+      "${_artifact_dir}/lib${TARGET}.a"
+      "${_artifact_dir}/${_top}_systemc.h"
+      "${_artifact_dir}/${_top}.h"
+      "${_artifact_dir}/model_${_top}.h")
   endif()
   add_custom_command(
     OUTPUT "${_stamp}"
